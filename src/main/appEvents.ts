@@ -269,10 +269,44 @@ app
           .fromPartition('persist:user-partition')
           .setPermissionRequestHandler((webContents, permission, callback) => {
             const url = webContents.getURL();
-            return url === 'http://localhost:1212/index.html' ||
-              permission === 'fullscreen'
-              ? callback(true)
-              : callback(false);
+            
+            // Allow permissions for localhost (app UI)
+            if (url === 'http://localhost:1212/index.html') {
+              return callback(true);
+            }
+            
+            // Allow essential permissions for web browsing
+            const allowedPermissions = [
+              'fullscreen',
+              'media', // For microphone access (voice search)
+              'camera', // For webcam access
+              'notifications', // For web notifications
+              'geolocation', // For location services
+              'clipboard-read', // For clipboard access
+              'clipboard-write' // For clipboard writing
+            ];
+            
+            if (allowedPermissions.includes(permission)) {
+              // For microphone permissions, temporarily disable click-through
+              if (permission === 'media') {
+                const { globalShortcutsHelper } = require('./globalShortcuts');
+                globalShortcutsHelper.disableClickThrough();
+                console.log('Microphone permission requested - temporarily disabled click-through for voice interaction');
+                
+                // Re-enable click-through after 30 seconds if user doesn't interact
+                setTimeout(() => {
+                  if (!globalShortcutsHelper.getClickThroughState()) {
+                    globalShortcutsHelper.enableClickThrough();
+                    console.log('Re-enabled click-through after microphone permission timeout');
+                  }
+                }, 30000);
+              }
+              
+              return callback(true);
+            }
+            
+            // Block other permissions
+            return callback(false);
           });
 
         const mainWindow = getMainWindow();
