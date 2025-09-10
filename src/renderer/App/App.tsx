@@ -7,6 +7,7 @@ import { store, getPersistedStoreAndPersistor } from 'renderer/App/store/store';
 import { Addaps } from 'renderer/App/components/Addaps';
 import ErrorFallback from 'renderer/App/components/ErrorFallback';
 import { Ping } from 'renderer/App/components/Ping';
+import ScreenshotToastManager from 'renderer/App/components/ScreenshotToastManager';
 import { useAnalytics } from './hooks/useAnalytics';
 
 import './i18n';
@@ -83,6 +84,7 @@ export function App() {
           <Addaps />
         </Provider>
       )}
+      <ScreenshotToastManager />
     </ErrorFallback>
   );
 }

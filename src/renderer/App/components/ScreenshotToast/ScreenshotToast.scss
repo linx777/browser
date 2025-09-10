@@ -1,0 +1,301 @@
+.screenshot-toast {
+  position: relative;
+  width: 320px;
+  background: rgba(0, 0, 0, 0.9);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  z-index: 10000;
+  animation: slideInRight 0.3s ease-out;
+  overflow: hidden;
+
+  .screenshot-toast-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+
+    .screenshot-toast-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+
+      .screenshot-icon {
+        font-size: 16px;
+      }
+
+      .persistent-indicator {
+        font-size: 12px;
+        opacity: 0.7;
+        margin-left: 4px;
+      }
+    }
+
+    .screenshot-toast-close {
+      background: none;
+      border: none;
+      color: rgba(255, 255, 255, 0.6);
+      cursor: pointer;
+      padding: 4px;
+      border-radius: 4px;
+      transition: all 0.2s ease;
+
+      &:hover:not(:disabled) {
+        color: #fff;
+        background: rgba(255, 255, 255, 0.1);
+      }
+
+      &:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+    }
+  }
+
+  .screenshot-toast-content {
+    padding: 16px;
+
+    .screenshot-preview {
+      width: 100%;
+      height: 120px;
+      border-radius: 8px;
+      overflow: hidden;
+      background: transparent;
+      margin-bottom: 12px;
+      position: relative;
+
+      .screenshot-loading {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        background: transparent;
+
+        .loading-spinner {
+          width: 24px;
+          height: 24px;
+          border: 2px solid rgba(255, 255, 255, 0.2);
+          border-top: 2px solid #fff;
+          border-radius: 50%;
+          animation: spin 1s linear infinite;
+        }
+      }
+
+      .screenshot-image {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        transition: transform 0.2s ease;
+
+        &:hover {
+          transform: scale(1.05);
+        }
+      }
+
+      .screenshot-placeholder {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        color: rgba(255, 255, 255, 0.5);
+        font-size: 12px;
+        background: transparent;
+      }
+
+      .screenshot-delete-btn {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        width: 28px;
+        height: 28px;
+        background: rgba(239, 68, 68, 0.9);
+        border: none;
+        border-radius: 50%;
+        color: white;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s ease;
+        z-index: 10;
+        opacity: 0.8;
+
+        &:hover:not(:disabled) {
+          opacity: 1;
+          background: rgba(239, 68, 68, 1);
+          transform: scale(1.1);
+        }
+
+        &:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+
+        .loading-spinner.small {
+          width: 12px;
+          height: 12px;
+          border: 1px solid rgba(255, 255, 255, 0.3);
+          border-top: 1px solid white;
+          border-radius: 50%;
+          animation: spin 1s linear infinite;
+        }
+      }
+    }
+
+    .screenshot-info {
+      .screenshot-filename {
+        color: #fff;
+        font-size: 13px;
+        font-weight: 500;
+        margin-bottom: 4px;
+        word-break: break-all;
+      }
+
+      .screenshot-timestamp {
+        color: rgba(255, 255, 255, 0.6);
+        font-size: 11px;
+      }
+    }
+  }
+
+  .screenshot-toast-actions {
+    display: flex;
+    gap: 8px;
+    padding: 12px 16px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+
+    .screenshot-action-btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 12px;
+      border: none;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      flex: 1;
+
+      &.open-btn {
+        background: rgba(59, 130, 246, 0.2);
+        color: #60a5fa;
+        border: 1px solid rgba(59, 130, 246, 0.3);
+
+        &:hover:not(:disabled) {
+          background: rgba(59, 130, 246, 0.3);
+          color: #93c5fd;
+        }
+      }
+
+      &.delete-btn {
+        background: rgba(239, 68, 68, 0.2);
+        color: #f87171;
+        border: 1px solid rgba(239, 68, 68, 0.3);
+
+        &:hover:not(:disabled) {
+          background: rgba(239, 68, 68, 0.3);
+          color: #fca5a5;
+        }
+      }
+
+      &:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .loading-spinner.small {
+        width: 12px;
+        height: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-top: 1px solid currentColor;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+      }
+    }
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+// Dark theme adjustments
+@media (prefers-color-scheme: dark) {
+  .screenshot-toast {
+    background: rgba(0, 0, 0, 0.95);
+    border-color: rgba(255, 255, 255, 0.15);
+  }
+}
+
+// Light theme adjustments
+@media (prefers-color-scheme: light) {
+  .screenshot-toast {
+    background: rgba(255, 255, 255, 0.95);
+    border-color: rgba(0, 0, 0, 0.1);
+    color: #000;
+
+    .screenshot-toast-header {
+      border-bottom-color: rgba(0, 0, 0, 0.1);
+
+      .screenshot-toast-title {
+        color: #000;
+      }
+
+      .screenshot-toast-close {
+        color: rgba(0, 0, 0, 0.6);
+
+        &:hover:not(:disabled) {
+          color: #000;
+          background: rgba(0, 0, 0, 0.1);
+        }
+      }
+    }
+
+    .screenshot-toast-content {
+      .screenshot-preview {
+        background: transparent;
+
+        .screenshot-placeholder {
+          color: rgba(0, 0, 0, 0.5);
+          background: transparent;
+        }
+      }
+
+      .screenshot-info {
+        .screenshot-filename {
+          color: #000;
+        }
+
+        .screenshot-timestamp {
+          color: rgba(0, 0, 0, 0.6);
+        }
+      }
+    }
+
+    .screenshot-toast-actions {
+      border-top-color: rgba(0, 0, 0, 0.1);
+    }
+  }
+}

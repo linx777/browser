@@ -1,0 +1,50 @@
+.screenshot-toast-manager {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 360px; // Slightly wider to accommodate the toast
+  height: 100vh;
+  pointer-events: none; // Allow clicks to pass through the container
+  z-index: 10000;
+
+  .screenshot-toast-wrapper {
+    position: absolute;
+    right: 20px;
+    pointer-events: auto; // Re-enable pointer events for the toast itself
+    animation: slideInRight 0.3s ease-out;
+    margin-bottom: 30px; // Add spacing between toasts
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+// Responsive adjustments
+@media (max-width: 768px) {
+  .screenshot-toast-manager {
+    width: 100vw;
+    
+    .screenshot-toast-wrapper {
+      right: 10px;
+      left: 10px;
+    }
+  }
+}
+
+// Ensure toasts don't go off-screen on smaller heights
+@media (max-height: 600px) {
+  .screenshot-toast-manager {
+    .screenshot-toast-wrapper {
+      // Reduce spacing on smaller screens
+      margin-bottom: 10px;
+    }
+  }
+}

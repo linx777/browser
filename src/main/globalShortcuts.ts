@@ -279,23 +279,8 @@ export class GlobalShortcutsHelper {
         hideWindow: true,
         format: 'png'
       });
-      
-      // Notify renderer process about the screenshot
-      if (this.mainWindow && !this.mainWindow.isDestroyed()) {
-        this.mainWindow.webContents.send('screenshot-taken', {
-          path: screenshotPath,
-          timestamp: Date.now()
-        });
-      }
     } catch (error) {
       console.error('Error taking screenshot:', error);
-      
-      // Notify renderer process about the error
-      if (this.mainWindow && !this.mainWindow.isDestroyed()) {
-        this.mainWindow.webContents.send('screenshot-error', {
-          error: error.message
-        });
-      }
     }
   }
 }
