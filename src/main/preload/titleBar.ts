@@ -181,4 +181,20 @@ contextBridge.exposeInMainWorld('titleBar', {
   os: {
     getPlatform: () => process.platform,
   },
+  // Window control functions for screen capture resistance
+  moveWindow: (direction: 'up' | 'down' | 'left' | 'right') => {
+    ipcRenderer.send('move-window', direction);
+  },
+  toggleVisibility: () => {
+    ipcRenderer.send('toggle-window-visibility');
+  },
+  adjustOpacity: (direction: 'increase' | 'decrease') => {
+    ipcRenderer.send('adjust-window-opacity', direction);
+  },
+  toggleClickThrough: () => {
+    return ipcRenderer.invoke('toggle-click-through');
+  },
+  getClickThroughState: () => {
+    return ipcRenderer.invoke('get-click-through-state');
+  },
 });

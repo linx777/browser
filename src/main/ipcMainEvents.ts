@@ -714,4 +714,32 @@ export const makeIpcMainEvents = (): void => {
   ipcMain.on('show-settings', () => {
     getSelectedView()?.webContents.send('show-settings');
   });
+
+  // Click-through control handlers
+  /**
+   * Toggles click-through mode
+   */
+  ipcMain.handle('toggle-click-through', () => {
+    try {
+      const { globalShortcutsHelper } = require('./globalShortcuts');
+      globalShortcutsHelper.toggleClickThrough();
+      return { success: true, isClickThrough: globalShortcutsHelper.getClickThroughState() };
+    } catch (error) {
+      console.error('Error toggling click-through:', error);
+      return { error: 'Failed to toggle click-through' };
+    }
+  });
+
+  /**
+   * Gets the current click-through state
+   */
+  ipcMain.handle('get-click-through-state', () => {
+    try {
+      const { globalShortcutsHelper } = require('./globalShortcuts');
+      return { success: true, isClickThrough: globalShortcutsHelper.getClickThroughState() };
+    } catch (error) {
+      console.error('Error getting click-through state:', error);
+      return { error: 'Failed to get click-through state' };
+    }
+  });
 };

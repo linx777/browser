@@ -10,6 +10,7 @@ import path from 'path';
 
 import { Electron } from 'namespaces/_electronist';
 import { makeAssociation } from './association';
+import { globalShortcutsHelper } from './globalShortcuts';
 import {
   createWindow,
   getMainWindow,
@@ -293,6 +294,10 @@ app
 
         if (!app.isPackaged)
           mainWindow?.webContents.openDevTools({ mode: 'detach' });
+
+        // Initialize global shortcuts
+        globalShortcutsHelper.setMainWindow(mainWindow);
+        globalShortcutsHelper.registerGlobalShortcuts();
       })
       .catch(console.log);
 

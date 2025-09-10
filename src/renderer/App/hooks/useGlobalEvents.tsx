@@ -78,10 +78,10 @@ export const useGlobalEvents = () => {
           window.app.board.selectNext();
         }
 
-        // open a new board
+        // open a new board - moved to Ctrl+Shift+B to avoid conflict with global shortcut
         else if (
           e.ctrlKey &&
-          !e.shiftKey &&
+          e.shiftKey &&
           keysPressed.includes('b') &&
           keysPressed.length === 2
         ) {
