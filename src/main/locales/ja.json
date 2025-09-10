@@ -1,0 +1,19 @@
+{
+  "Close all tabs": "すべてのタブを閉じる",
+  "Close all windows": "すべてのウィンドウを閉じる",
+  "Close others tabs": "他のタブを閉じる",
+  "Close others windows": "他のウィンドウを閉じる",
+  "Close tab": "タブを閉じる",
+  "Close window": "ウィンドウを閉じる",
+  "Distribute windows evenly": "ウィンドウを均等に分散",
+  "Inspect element": "要素を検査する",
+  "Rename tab": "タブの名前を変更",
+  "Toggle pin window": "ピンウィンドウの切り替え",
+  "Close board": "ボードを閉じる",
+  "Close all boards": "すべてのボードを閉じる",
+  "Close others boards": "他のボードを閉じる",
+  "Rename board": "ボードの名前を変更",
+  "Save board": "ボードを保存",
+  "Set as default window size": "デフォルトのウィンドウサイズとして設定",
+  "Reset settings": "設定をリセット"
+}
