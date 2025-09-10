@@ -89,6 +89,11 @@ export class GlobalShortcutsHelper {
       this.disableClickThrough();
     });
 
+    // Screenshot shortcut
+    globalShortcut.register('CommandOrControl+H', async () => {
+      await this.takeScreenshot();
+    });
+
     console.log('Global shortcuts registered successfully');
   }
 
@@ -261,6 +266,36 @@ export class GlobalShortcutsHelper {
     if (this.mouseTrackingInterval) {
       clearInterval(this.mouseTrackingInterval);
       this.mouseTrackingInterval = null;
+    }
+  }
+
+  /**
+   * Takes a screenshot using the screenshot helper
+   */
+  private async takeScreenshot(): Promise<void> {
+    try {
+      const { screenshotHelper } = require('./screenshotHelper');
+      const screenshotPath = await screenshotHelper.takeScreenshot(this.mainWindow, {
+        hideWindow: true,
+        format: 'png'
+      });
+      
+      // Notify renderer process about the screenshot
+      if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+        this.mainWindow.webContents.send('screenshot-taken', {
+          path: screenshotPath,
+          timestamp: Date.now()
+        });
+      }
+    } catch (error) {
+      console.error('Error taking screenshot:', error);
+      
+      // Notify renderer process about the error
+      if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+        this.mainWindow.webContents.send('screenshot-error', {
+          error: error.message
+        });
+      }
     }
   }
 }

@@ -172,6 +172,25 @@ declare global {
         clicked: () => void;
         findInKnownDomains: (input: string) => Promise<DomainSuggestion[]>;
       };
+      clipboard: {
+        readClipboard: () => Promise<string>;
+        writeClipboard: (text: string) => Promise<void>;
+        getClipboardItems: () => Promise<{success: boolean, items?: Array<{id: string, content: string, timestamp: number}>, error?: string}>;
+        clearClipboardItems: () => Promise<{success: boolean, error?: string}>;
+        removeClipboardItem: (id: string) => Promise<{success: boolean, error?: string}>;
+        startMonitoring: () => Promise<{success: boolean, error?: string}>;
+        stopMonitoring: () => Promise<{success: boolean, error?: string}>;
+      getMonitoringStatus: () => Promise<{success: boolean, isMonitoring?: boolean, stats?: {totalItems: number, oldestItem?: number, newestItem?: number}, error?: string}>;
+    };
+    screenshot: {
+      takeScreenshot: () => Promise<{success: boolean, path?: string, error?: string}>;
+      getScreenshotPaths: () => Promise<{success: boolean, paths?: string[], error?: string}>;
+      getScreenshotDirectory: () => Promise<{success: boolean, directory?: string, error?: string}>;
+      getImagePreview: (filepath: string) => Promise<{success: boolean, preview?: string, error?: string}>;
+      deleteScreenshot: (filepath: string) => Promise<{success: boolean, error?: string}>;
+      clearScreenshots: () => Promise<{success: boolean, error?: string}>;
+      getStats: () => Promise<{success: boolean, stats?: {totalScreenshots: number, directory: string}, error?: string}>;
+    };
     };
   }
 }

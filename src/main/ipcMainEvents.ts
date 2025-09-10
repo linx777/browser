@@ -742,4 +742,219 @@ export const makeIpcMainEvents = (): void => {
       return { error: 'Failed to get click-through state' };
     }
   });
+
+  // Clipboard handlers
+  /**
+   * Reads clipboard content
+   */
+  ipcMain.handle('read-clipboard', () => {
+    try {
+      const { clipboardManager } = require('./clipboardManager');
+      return clipboardManager.readClipboard();
+    } catch (error) {
+      console.error('Error reading clipboard:', error);
+      return '';
+    }
+  });
+
+  /**
+   * Writes text to clipboard
+   */
+  ipcMain.handle('write-clipboard', (_event, text: string) => {
+    try {
+      const { clipboardManager } = require('./clipboardManager');
+      clipboardManager.writeClipboard(text);
+    } catch (error) {
+      console.error('Error writing to clipboard:', error);
+      throw error;
+    }
+  });
+
+  /**
+   * Gets clipboard items
+   */
+  ipcMain.handle('get-clipboard-items', (_event) => {
+    try {
+      const { clipboardManager } = require('./clipboardManager');
+      const items = clipboardManager.getClipboardItems();
+      return { success: true, items };
+    } catch (error) {
+      console.error('[IPC] Error getting clipboard items:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Clears all clipboard items
+   */
+  ipcMain.handle('clear-clipboard-items', (_event) => {
+    try {
+      const { clipboardManager } = require('./clipboardManager');
+      clipboardManager.clearClipboardItems();
+      return { success: true };
+    } catch (error) {
+      console.error('[IPC] Error clearing clipboard items:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Removes a specific clipboard item
+   */
+  ipcMain.handle('remove-clipboard-item', (_event, id: string) => {
+    try {
+      const { clipboardManager } = require('./clipboardManager');
+      const success = clipboardManager.removeClipboardItem(id);
+      return { success };
+    } catch (error) {
+      console.error('[IPC] Error removing clipboard item:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Starts clipboard monitoring
+   */
+  ipcMain.handle('start-clipboard-monitoring', () => {
+    try {
+      const { clipboardManager } = require('./clipboardManager');
+      clipboardManager.startMonitoring();
+      return { success: true };
+    } catch (error) {
+      console.error('[IPC] Error starting clipboard monitoring:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Stops clipboard monitoring
+   */
+  ipcMain.handle('stop-clipboard-monitoring', () => {
+    try {
+      const { clipboardManager } = require('./clipboardManager');
+      clipboardManager.stopMonitoring();
+      return { success: true };
+    } catch (error) {
+      console.error('[IPC] Error stopping clipboard monitoring:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Gets clipboard monitoring status
+   */
+  ipcMain.handle('get-clipboard-monitoring-status', () => {
+    try {
+      const { clipboardManager } = require('./clipboardManager');
+      const isMonitoring = clipboardManager.isMonitoringActive();
+      const stats = clipboardManager.getStats();
+      return { success: true, isMonitoring, stats };
+    } catch (error) {
+      console.error('[IPC] Error getting clipboard monitoring status:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  // Screenshot handlers
+  /**
+   * Takes a screenshot
+   */
+  ipcMain.handle('take-screenshot', async () => {
+    try {
+      const { screenshotHelper } = require('./screenshotHelper');
+      const mainWindow = getMainWindow();
+      const screenshotPath = await screenshotHelper.takeScreenshot(mainWindow, {
+        hideWindow: true,
+        format: 'png'
+      });
+      return { success: true, path: screenshotPath };
+    } catch (error) {
+      console.error('[IPC] Error taking screenshot:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Gets all screenshot paths
+   */
+  ipcMain.handle('get-screenshot-paths', () => {
+    try {
+      const { screenshotHelper } = require('./screenshotHelper');
+      const paths = screenshotHelper.getScreenshotPaths();
+      return { success: true, paths };
+    } catch (error) {
+      console.error('[IPC] Error getting screenshot paths:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Gets screenshot directory
+   */
+  ipcMain.handle('get-screenshot-directory', () => {
+    try {
+      const { screenshotHelper } = require('./screenshotHelper');
+      const directory = screenshotHelper.getScreenshotDirectory();
+      return { success: true, directory };
+    } catch (error) {
+      console.error('[IPC] Error getting screenshot directory:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Gets image preview
+   */
+  ipcMain.handle('get-image-preview', async (_event, filepath: string) => {
+    try {
+      const { screenshotHelper } = require('./screenshotHelper');
+      const preview = await screenshotHelper.getImagePreview(filepath);
+      return { success: true, preview };
+    } catch (error) {
+      console.error('[IPC] Error getting image preview:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Deletes a screenshot
+   */
+  ipcMain.handle('delete-screenshot', async (_event, filepath: string) => {
+    try {
+      const { screenshotHelper } = require('./screenshotHelper');
+      const result = await screenshotHelper.deleteScreenshot(filepath);
+      return result;
+    } catch (error) {
+      console.error('[IPC] Error deleting screenshot:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Clears all screenshots
+   */
+  ipcMain.handle('clear-screenshots', () => {
+    try {
+      const { screenshotHelper } = require('./screenshotHelper');
+      screenshotHelper.clearScreenshots();
+      return { success: true };
+    } catch (error) {
+      console.error('[IPC] Error clearing screenshots:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
+   * Gets screenshot statistics
+   */
+  ipcMain.handle('get-screenshot-stats', () => {
+    try {
+      const { screenshotHelper } = require('./screenshotHelper');
+      const stats = screenshotHelper.getStats();
+      return { success: true, stats };
+    } catch (error) {
+      console.error('[IPC] Error getting screenshot stats:', error);
+      return { success: false, error: error.message };
+    }
+  });
 };

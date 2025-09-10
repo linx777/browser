@@ -164,5 +164,13 @@ export const createWindow = async (): Promise<BrowserWindow> => {
     true
   );
 
+  // Initialize clipboard monitoring
+  try {
+    const { clipboardManager } = require('./clipboardManager');
+    clipboardManager.startMonitoring();
+  } catch (error) {
+    console.error('[Browser] Failed to start clipboard monitoring:', error);
+  }
+
   return mainWindow;
 };

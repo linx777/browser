@@ -379,6 +379,55 @@ contextBridge.exposeInMainWorld('app', {
       return ipcRenderer.invoke('find-in-known-domains', input);
     },
   },
+  clipboard: {
+    readClipboard: (): Promise<string> => {
+      return ipcRenderer.invoke('read-clipboard');
+    },
+    writeClipboard: (text: string): Promise<void> => {
+      return ipcRenderer.invoke('write-clipboard', text);
+    },
+    getClipboardItems: (): Promise<{success: boolean, items?: Array<{id: string, content: string, timestamp: number}>, error?: string}> => {
+      return ipcRenderer.invoke('get-clipboard-items');
+    },
+    clearClipboardItems: (): Promise<{success: boolean, error?: string}> => {
+      return ipcRenderer.invoke('clear-clipboard-items');
+    },
+    removeClipboardItem: (id: string): Promise<{success: boolean, error?: string}> => {
+      return ipcRenderer.invoke('remove-clipboard-item', id);
+    },
+    startMonitoring: (): Promise<{success: boolean, error?: string}> => {
+      return ipcRenderer.invoke('start-clipboard-monitoring');
+    },
+    stopMonitoring: (): Promise<{success: boolean, error?: string}> => {
+      return ipcRenderer.invoke('stop-clipboard-monitoring');
+    },
+          getMonitoringStatus: (): Promise<{success: boolean, isMonitoring?: boolean, stats?: {totalItems: number, oldestItem?: number, newestItem?: number}, error?: string}> => {
+            return ipcRenderer.invoke('get-clipboard-monitoring-status');
+          },
+        },
+        screenshot: {
+          takeScreenshot: (): Promise<{success: boolean, path?: string, error?: string}> => {
+            return ipcRenderer.invoke('take-screenshot');
+          },
+          getScreenshotPaths: (): Promise<{success: boolean, paths?: string[], error?: string}> => {
+            return ipcRenderer.invoke('get-screenshot-paths');
+          },
+          getScreenshotDirectory: (): Promise<{success: boolean, directory?: string, error?: string}> => {
+            return ipcRenderer.invoke('get-screenshot-directory');
+          },
+          getImagePreview: (filepath: string): Promise<{success: boolean, preview?: string, error?: string}> => {
+            return ipcRenderer.invoke('get-image-preview', filepath);
+          },
+          deleteScreenshot: (filepath: string): Promise<{success: boolean, error?: string}> => {
+            return ipcRenderer.invoke('delete-screenshot', filepath);
+          },
+          clearScreenshots: (): Promise<{success: boolean, error?: string}> => {
+            return ipcRenderer.invoke('clear-screenshots');
+          },
+          getStats: (): Promise<{success: boolean, stats?: {totalScreenshots: number, directory: string}, error?: string}> => {
+            return ipcRenderer.invoke('get-screenshot-stats');
+          },
+        },
   os: {
     getPlatform: () => process.platform,
   },
