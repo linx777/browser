@@ -151,6 +151,188 @@ const makeAppEvents = () => {
         webContents.send('created-webcontents', {
           webContentsId: webContents.id,
         });
+
+        // Inject auto-copy script and force arrow cursor after DOM is ready
+        webContents.executeJavaScript(`
+          (() => {
+            // Only inject if not already injected
+            if (window.bonbonAutoCopyInjected) return;
+            window.bonbonAutoCopyInjected = true;
+            
+            console.log('BonBon auto-copy script injected successfully');
+            
+            // Force arrow cursor for all elements
+            function forceArrowCursor() {
+              const style = document.createElement('style');
+              style.id = 'bonbon-cursor-style';
+              style.textContent = \`
+                *, *::before, *::after {
+                  cursor: default !important;
+                }
+                input, textarea, [contenteditable] {
+                  cursor: default !important;
+                }
+                a, button, [role="button"], [onclick] {
+                  cursor: default !important;
+                }
+                .bonbon-notification {
+                  cursor: default !important;
+                }
+              \`;
+              document.head.appendChild(style);
+              console.log('Forced arrow cursor for all elements');
+            }
+            
+            let lastSelectedText = '';
+            let isProcessing = false;
+            
+            function showNotification(message) {
+              // Remove any existing notifications
+              const existing = document.querySelector('.bonbon-notification');
+              if (existing) {
+                existing.remove();
+              }
+              
+              const feedback = document.createElement('div');
+              feedback.className = 'bonbon-notification';
+              feedback.textContent = message;
+              feedback.style.cssText = \`
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: rgba(0, 0, 0, 0.9);
+                color: white;
+                padding: 12px 16px;
+                border-radius: 6px;
+                font-size: 14px;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                z-index: 2147483647;
+                pointer-events: none;
+                transition: all 0.3s ease;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                cursor: default !important;
+              \`;
+              document.body.appendChild(feedback);
+              
+              // Remove feedback after 3 seconds
+              setTimeout(() => {
+                feedback.style.opacity = '0';
+                feedback.style.transform = 'translateX(100%)';
+                setTimeout(() => {
+                  if (feedback.parentNode) {
+                    feedback.parentNode.removeChild(feedback);
+                  }
+                }, 300);
+              }, 3000);
+            }
+            
+            function copyToClipboard(text) {
+              if (isProcessing) return;
+              isProcessing = true;
+              
+              // Try modern clipboard API first
+              if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(() => {
+                  console.log('Auto-copied to clipboard:', text.substring(0, 50) + (text.length > 50 ? '...' : ''));
+                  showNotification('✓ Copied to clipboard');
+                  isProcessing = false;
+                }).catch(err => {
+                  console.log('Clipboard API failed, trying fallback:', err);
+                  fallbackCopy(text);
+                });
+              } else {
+                fallbackCopy(text);
+              }
+            }
+            
+            function fallbackCopy(text) {
+              // Fallback method using document.execCommand
+              const textArea = document.createElement('textarea');
+              textArea.value = text;
+              textArea.style.position = 'fixed';
+              textArea.style.left = '-999999px';
+              textArea.style.top = '-999999px';
+              document.body.appendChild(textArea);
+              textArea.focus();
+              textArea.select();
+              
+              try {
+                const successful = document.execCommand('copy');
+                if (successful) {
+                  console.log('Auto-copied to clipboard (fallback):', text.substring(0, 50) + (text.length > 50 ? '...' : ''));
+                  showNotification('✓ Copied to clipboard');
+                } else {
+                  console.log('Fallback copy failed');
+                  showNotification('❌ Copy failed');
+                }
+              } catch (err) {
+                console.log('Fallback copy error:', err);
+                showNotification('❌ Copy failed');
+              } finally {
+                document.body.removeChild(textArea);
+                isProcessing = false;
+              }
+            }
+            
+            // Listen for selection changes
+            document.addEventListener('mouseup', () => {
+              setTimeout(() => {
+                const selection = window.getSelection();
+                if (selection && selection.toString().trim().length > 0) {
+                  const selectedText = selection.toString().trim();
+                  
+                  // Only copy if text is different from last selection and not too short
+                  if (selectedText !== lastSelectedText && selectedText.length > 2) {
+                    lastSelectedText = selectedText;
+                    copyToClipboard(selectedText);
+                  }
+                }
+              }, 150); // Slightly longer delay to ensure selection is complete
+            });
+            
+            // Also listen for keyboard selection
+            document.addEventListener('keyup', (e) => {
+              if (e.shiftKey || e.ctrlKey || e.metaKey) {
+                setTimeout(() => {
+                  const selection = window.getSelection();
+                  if (selection && selection.toString().trim().length > 0) {
+                    const selectedText = selection.toString().trim();
+                    
+                    if (selectedText !== lastSelectedText && selectedText.length > 2) {
+                      lastSelectedText = selectedText;
+                      copyToClipboard(selectedText);
+                    }
+                  }
+                }, 150);
+              }
+            });
+            
+            // Force arrow cursor immediately
+            forceArrowCursor();
+            
+            // Re-apply cursor style when new content is added
+            const observer = new MutationObserver(() => {
+              const existingStyle = document.getElementById('bonbon-cursor-style');
+              if (!existingStyle) {
+                forceArrowCursor();
+              }
+            });
+            
+            observer.observe(document.body, {
+              childList: true,
+              subtree: true
+            });
+            
+            // Test notification on load
+            setTimeout(() => {
+              showNotification('🎉 Auto-copy enabled! Select text to copy.');
+            }, 1000);
+          })();
+        `).catch(err => {
+          // Ignore errors for pages that don't allow script execution
+          console.log('Could not inject auto-copy script:', err.message);
+        });
       });
 
       const mainWindow = getMainWindow();
