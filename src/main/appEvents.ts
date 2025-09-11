@@ -31,6 +31,161 @@ import {
 import { isValidUrl } from './util';
 import Tracker from './analytics/tracker';
 
+// Function to switch focus to ChatGPT and paste content
+const switchToChatGPTAndPaste = (content: string) => {
+  try {
+    // Get all browser webviews
+    const browsers = getBrowsers();
+    
+    // Find ChatGPT tab/webview
+    let chatgptWebContents = null;
+    for (const [, webContents] of Object.entries(browsers)) {
+      const url = webContents.getURL();
+      if (url.includes('chat.openai.com') || url.includes('chatgpt.com')) {
+        chatgptWebContents = webContents;
+        break;
+      }
+    }
+    
+    if (chatgptWebContents) {
+      // Focus the ChatGPT webview
+      chatgptWebContents.focus();
+      
+      // Wait a moment for focus to take effect, then paste the content
+      setTimeout(() => {
+        chatgptWebContents.executeJavaScript(`
+          (() => {
+            // Look for ChatGPT input field with various selectors
+            const chatgptSelectors = [
+              'div[contenteditable="true"][id="prompt-textarea"]',
+              'div[contenteditable="true"][id="prompt-textarea"].ProseMirror',
+              'textarea[placeholder*="Ask anything"]',
+              'textarea[placeholder*="ask anything"]', 
+              'textarea[placeholder*="Ask"]',
+              'textarea[placeholder*="ask"]',
+              'input[placeholder*="Ask anything"]',
+              'input[placeholder*="ask anything"]',
+              'input[placeholder*="Ask"]',
+              'input[placeholder*="ask"]',
+              'textarea[data-testid*="input"]',
+              'textarea[data-testid*="textbox"]',
+              'textarea[aria-label*="input"]',
+              'textarea[aria-label*="textbox"]',
+              'div[contenteditable="true"][data-testid*="input"]',
+              'div[contenteditable="true"][data-testid*="textbox"]'
+            ];
+            
+            let inputElement = null;
+            
+            // Try each selector
+            for (const selector of chatgptSelectors) {
+              inputElement = document.querySelector(selector);
+              if (inputElement) {
+                break;
+              }
+            }
+            
+            // If no specific ChatGPT input found, look for any textarea or input that might be a chat input
+            if (!inputElement) {
+              const allInputs = document.querySelectorAll('textarea, input[type="text"]');
+              for (const input of allInputs) {
+                const placeholder = input.placeholder?.toLowerCase() || '';
+                const ariaLabel = input.getAttribute('aria-label')?.toLowerCase() || '';
+                const className = input.className?.toLowerCase() || '';
+                
+                // Check if this looks like a chat input
+                if (placeholder.includes('ask') || 
+                    placeholder.includes('message') || 
+                    placeholder.includes('chat') ||
+                    ariaLabel.includes('input') ||
+                    ariaLabel.includes('textbox') ||
+                    className.includes('input') ||
+                    className.includes('textbox')) {
+                  inputElement = input;
+                  break;
+                }
+              }
+            }
+            
+            if (inputElement) {
+              // Check if the input already has the same content to avoid unnecessary updates
+              const currentValue = inputElement.tagName === 'TEXTAREA' || inputElement.tagName === 'INPUT' 
+                ? inputElement.value 
+                : inputElement.textContent;
+              
+              if (currentValue === '${content.replace(/'/g, "\\'")}') {
+                return;
+              }
+              
+              // Focus the input
+              inputElement.focus();
+              
+              // Clear existing content and set new content
+              if (inputElement.tagName === 'TEXTAREA' || inputElement.tagName === 'INPUT') {
+                inputElement.value = '${content.replace(/'/g, "\\'")}';
+              } else if (inputElement.contentEditable === 'true') {
+                inputElement.textContent = '${content.replace(/'/g, "\\'")}';
+              }
+              
+              // Trigger input events to ensure the content is properly set
+              const inputEvent = new Event('input', { bubbles: true });
+              const changeEvent = new Event('change', { bubbles: true });
+              inputElement.dispatchEvent(inputEvent);
+              inputElement.dispatchEvent(changeEvent);
+              
+              // Show a temporary notification
+              const notification = document.createElement('div');
+              notification.textContent = '✓ Auto-pasted to ChatGPT';
+              notification.style.cssText = \`
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: rgba(0, 0, 0, 0.9);
+                color: white;
+                padding: 12px 16px;
+                border-radius: 6px;
+                font-size: 14px;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                z-index: 2147483647;
+                pointer-events: none;
+                transition: all 0.3s ease;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                cursor: default !important;
+                max-width: 300px;
+                word-wrap: break-word;
+                user-select: none;
+                -webkit-user-select: none;
+                -moz-user-select: none;
+                -ms-user-select: none;
+              \`;
+              
+              document.body.appendChild(notification);
+              
+              // Auto-remove after 2 seconds
+              setTimeout(() => {
+                notification.style.opacity = '0';
+                notification.style.transform = 'translateX(100%)';
+                setTimeout(() => {
+                  if (notification.parentNode) {
+                    notification.parentNode.removeChild(notification);
+                  }
+                }, 300);
+              }, 2000);
+            }
+          })();
+        `).catch(err => {
+          console.error('Error pasting to ChatGPT:', err);
+        });
+      }, 500); // Wait 500ms for focus to take effect
+    } else {
+      console.log('ChatGPT tab not found');
+    }
+  } catch (error) {
+    console.error('Error switching to ChatGPT:', error);
+  }
+};
+
 let urlToOpen: string | undefined;
 
 export const tracker = new Tracker();
@@ -139,6 +294,34 @@ const makeAppEvents = () => {
     contents.on('did-attach-webview', (_daw, webContents) => {
       getBrowsers()[webContents.id] = webContents;
       webContents.session.setMaxListeners(99);
+      
+      // Listen for custom messages from the webview
+      webContents.addListener('console-message', (_event, _level, message) => {
+        try {
+          const data = JSON.parse(message);
+          if (data.type === 'ADD_CLIPBOARD_ITEM' && data.content) {
+            const { clipboardManager } = require('./clipboardManager');
+            const item = clipboardManager.addClipboardItem(data.content);
+            if (item) {
+              // Send the item ID back to the webview
+              webContents.executeJavaScript(`
+                window.dispatchEvent(new CustomEvent('clipboard-item-added', {
+                  detail: { id: '${item.id}' }
+                }));
+              `);
+            }
+          } else if (data.type === 'REMOVE_CLIPBOARD_ITEM' && data.itemId) {
+            const { clipboardManager } = require('./clipboardManager');
+            clipboardManager.removeClipboardItem(data.itemId);
+          } else if (data.type === 'SWITCH_TO_CHATGPT_AND_PASTE' && data.content) {
+            // Switch focus to ChatGPT and paste content
+            switchToChatGPTAndPaste(data.content);
+          }
+        } catch (error) {
+          // Ignore non-JSON messages
+        }
+      });
+      
       webContents.addListener('dom-ready', () => {
         if (webContents.getURL() === 'https://web.whatsapp.com/') {
           webContents.setUserAgent(
@@ -159,7 +342,6 @@ const makeAppEvents = () => {
             if (window.bonbonAutoCopyInjected) return;
             window.bonbonAutoCopyInjected = true;
             
-            console.log('BonBon auto-copy script injected successfully');
             
             // Force arrow cursor for all elements
             function forceArrowCursor() {
@@ -180,25 +362,50 @@ const makeAppEvents = () => {
                 }
               \`;
               document.head.appendChild(style);
-              console.log('Forced arrow cursor for all elements');
             }
             
             let lastSelectedText = '';
             let isProcessing = false;
             
-            function showNotification(message) {
-              // Remove any existing notifications
-              const existing = document.querySelector('.bonbon-notification');
-              if (existing) {
-                existing.remove();
+            function cleanupOldNotifications() {
+              const notifications = document.querySelectorAll('.bonbon-notification');
+              const maxNotifications = 5; // Keep only the last 5 notifications
+              
+              if (notifications.length > maxNotifications) {
+                // Remove oldest notifications (they appear first in the DOM)
+                for (let i = 0; i < notifications.length - maxNotifications; i++) {
+                  notifications[i].remove();
+                }
               }
               
-              const feedback = document.createElement('div');
-              feedback.className = 'bonbon-notification';
-              feedback.textContent = message;
-              feedback.style.cssText = \`
+              // Recalculate positions for remaining notifications
+              const remainingNotifications = document.querySelectorAll('.bonbon-notification');
+              const toastHeight = 50;
+              const spacing = 10;
+              const topOffset = 20;
+              
+              remainingNotifications.forEach((notification, index) => {
+                const verticalPosition = topOffset + (index * (toastHeight + spacing));
+                notification.style.top = \`\${verticalPosition}px\`;
+              });
+            }
+            
+            function showTemporaryNotification(message, duration = 300) {
+              // Create a temporary notification that auto-disappears
+              const tempNotification = document.createElement('div');
+              tempNotification.className = 'bonbon-temp-notification';
+              tempNotification.textContent = message;
+              
+              // Calculate position for temporary notification (top of screen)
+              const existingNotifications = document.querySelectorAll('.bonbon-notification');
+              const toastHeight = 50;
+              const spacing = 10;
+              const topOffset = 20;
+              const verticalPosition = topOffset + (existingNotifications.length * (toastHeight + spacing));
+              
+              tempNotification.style.cssText = \`
                 position: fixed;
-                top: 20px;
+                top: \${verticalPosition}px;
                 right: 20px;
                 background: rgba(0, 0, 0, 0.9);
                 color: white;
@@ -212,19 +419,249 @@ const makeAppEvents = () => {
                 box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
                 border: 1px solid rgba(255, 255, 255, 0.1);
                 cursor: default !important;
+                max-width: 300px;
+                word-wrap: break-word;
+                user-select: none;
+                -webkit-user-select: none;
+                -moz-user-select: none;
+                -ms-user-select: none;
               \`;
-              document.body.appendChild(feedback);
               
-              // Remove feedback after 3 seconds
+              document.body.appendChild(tempNotification);
+              
+              // Auto-remove after specified duration
               setTimeout(() => {
-                feedback.style.opacity = '0';
-                feedback.style.transform = 'translateX(100%)';
+                tempNotification.style.opacity = '0';
+                tempNotification.style.transform = 'translateX(100%)';
                 setTimeout(() => {
-                  if (feedback.parentNode) {
-                    feedback.parentNode.removeChild(feedback);
+                  if (tempNotification.parentNode) {
+                    tempNotification.parentNode.removeChild(tempNotification);
                   }
                 }, 300);
-              }, 3000);
+              }, duration);
+            }
+            
+            function showNotification(message, fullText = null, clipboardItemId = null) {
+              // Create a unique ID for this notification
+              const notificationId = 'bonbon-notification-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+              
+              const feedback = document.createElement('div');
+              feedback.className = 'bonbon-notification';
+              feedback.id = notificationId;
+              feedback.setAttribute('data-clipboard-item-id', clipboardItemId || '');
+              
+              // Create close button
+              const closeButton = document.createElement('div');
+              closeButton.innerHTML = '×';
+              closeButton.style.cssText = \`
+                position: absolute;
+                top: 4px;
+                right: 8px;
+                width: 20px;
+                height: 20px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 16px;
+                font-weight: bold;
+                color: rgba(255, 255, 255, 0.7);
+                cursor: pointer;
+                border-radius: 3px;
+                transition: all 0.2s ease;
+                z-index: 1;
+              \`;
+              
+              // Add hover effect for close button
+              closeButton.addEventListener('mouseenter', () => {
+                closeButton.style.background = 'rgba(255, 255, 255, 0.1)';
+                closeButton.style.color = 'rgba(255, 255, 255, 1)';
+              });
+              
+              closeButton.addEventListener('mouseleave', () => {
+                closeButton.style.background = 'transparent';
+                closeButton.style.color = 'rgba(255, 255, 255, 0.7)';
+              });
+              
+              // Add click handler for close button
+              closeButton.addEventListener('click', (e) => {
+                e.stopPropagation(); // Prevent triggering double-click on toast
+                
+                // Store the clipboard item ID in the notification for later removal
+                const itemId = feedback.getAttribute('data-clipboard-item-id');
+                if (itemId) {
+                  // Send a custom event to the main process to remove the clipboard item
+                  console.log(JSON.stringify({
+                    type: 'REMOVE_CLIPBOARD_ITEM',
+                    itemId: itemId
+                  }));
+                }
+                
+                feedback.remove();
+                cleanupOldNotifications(); // Recalculate positions
+              });
+              
+              // Create content area
+              const content = document.createElement('div');
+              content.textContent = message;
+              content.style.cssText = \`
+                padding-right: 30px;
+                word-wrap: break-word;
+                user-select: none;
+                -webkit-user-select: none;
+                -moz-user-select: none;
+                -ms-user-select: none;
+              \`;
+              
+              feedback.appendChild(content);
+              feedback.appendChild(closeButton);
+              
+              // Calculate vertical position based on existing notifications
+              const existingNotifications = document.querySelectorAll('.bonbon-notification');
+              const toastHeight = 50; // Approximate height of each toast
+              const spacing = 10; // Spacing between toasts
+              const topOffset = 20; // Initial top offset
+              const verticalPosition = topOffset + (existingNotifications.length * (toastHeight + spacing));
+              
+              // Make toast clickable if it has full text (for auto-paste functionality)
+              const isClickable = fullText !== null;
+              
+              feedback.style.cssText = \`
+                position: fixed;
+                top: \${verticalPosition}px;
+                right: 20px;
+                background: rgba(0, 0, 0, 0.9);
+                color: white;
+                padding: 12px 16px;
+                border-radius: 6px;
+                font-size: 14px;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                z-index: 2147483647;
+                pointer-events: auto;
+                transition: all 0.3s ease;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                cursor: \${isClickable ? 'pointer' : 'default'};
+                max-width: 300px;
+                word-wrap: break-word;
+                user-select: none;
+                -webkit-user-select: none;
+                -moz-user-select: none;
+                -ms-user-select: none;
+              \`;
+              
+              // Add double-click event listener for auto-paste functionality
+              if (isClickable) {
+                feedback.addEventListener('dblclick', () => {
+                  // Send message to main process to switch focus to ChatGPT and paste content
+                  console.log(JSON.stringify({
+                    type: 'SWITCH_TO_CHATGPT_AND_PASTE',
+                    content: fullText
+                  }));
+                });
+                
+                // Add hover effect for clickable toasts
+                feedback.addEventListener('mouseenter', () => {
+                  feedback.style.background = 'rgba(0, 0, 0, 0.95)';
+                  feedback.style.border = '1px solid rgba(255, 255, 255, 0.2)';
+                });
+                
+                feedback.addEventListener('mouseleave', () => {
+                  feedback.style.background = 'rgba(0, 0, 0, 0.9)';
+                  feedback.style.border = '1px solid rgba(255, 255, 255, 0.1)';
+                });
+              }
+              
+              document.body.appendChild(feedback);
+              
+              // Clean up old notifications to prevent accumulation
+              cleanupOldNotifications();
+            }
+            
+            function autoPasteToChatGPT(text) {
+              try {
+                // Look for ChatGPT input field with various selectors
+                const chatgptSelectors = [
+                  'div[contenteditable="true"][id="prompt-textarea"]',
+                  'div[contenteditable="true"][id="prompt-textarea"].ProseMirror',
+                  'textarea[placeholder*="Ask anything"]',
+                  'textarea[placeholder*="ask anything"]', 
+                  'textarea[placeholder*="Ask"]',
+                  'textarea[placeholder*="ask"]',
+                  'input[placeholder*="Ask anything"]',
+                  'input[placeholder*="ask anything"]',
+                  'input[placeholder*="Ask"]',
+                  'input[placeholder*="ask"]',
+                  'textarea[data-testid*="input"]',
+                  'textarea[data-testid*="textbox"]',
+                  'textarea[aria-label*="input"]',
+                  'textarea[aria-label*="textbox"]',
+                  'div[contenteditable="true"][data-testid*="input"]',
+                  'div[contenteditable="true"][data-testid*="textbox"]'
+                ];
+                
+                let inputElement = null;
+                
+                // Try each selector
+                for (const selector of chatgptSelectors) {
+                  inputElement = document.querySelector(selector);
+                  if (inputElement) {
+                    break;
+                  }
+                }
+                
+                // If no specific ChatGPT input found, look for any textarea or input that might be a chat input
+                if (!inputElement) {
+                  const allInputs = document.querySelectorAll('textarea, input[type="text"]');
+                  for (const input of allInputs) {
+                    const placeholder = input.placeholder?.toLowerCase() || '';
+                    const ariaLabel = input.getAttribute('aria-label')?.toLowerCase() || '';
+                    const className = input.className?.toLowerCase() || '';
+                    
+                    // Check if this looks like a chat input
+                    if (placeholder.includes('ask') || 
+                        placeholder.includes('message') || 
+                        placeholder.includes('chat') ||
+                        ariaLabel.includes('input') ||
+                        ariaLabel.includes('textbox') ||
+                        className.includes('input') ||
+                        className.includes('textbox')) {
+                      inputElement = input;
+                      break;
+                    }
+                  }
+                }
+                
+                if (inputElement) {
+                  // Check if the input already has the same content to avoid unnecessary updates
+                  const currentValue = inputElement.tagName === 'TEXTAREA' || inputElement.tagName === 'INPUT' 
+                    ? inputElement.value 
+                    : inputElement.textContent;
+                  
+                  if (currentValue === text) {
+                    return;
+                  }
+                  
+                  // Focus the input
+                  inputElement.focus();
+                  
+                  // Clear existing content and set new content
+                  if (inputElement.tagName === 'TEXTAREA' || inputElement.tagName === 'INPUT') {
+                    inputElement.value = text;
+                  } else if (inputElement.contentEditable === 'true') {
+                    inputElement.textContent = text;
+                  }
+                  
+                  // Trigger input events to ensure the content is properly set
+                  const inputEvent = new Event('input', { bubbles: true });
+                  const changeEvent = new Event('change', { bubbles: true });
+                  inputElement.dispatchEvent(inputEvent);
+                  inputElement.dispatchEvent(changeEvent);
+                  
+                  showTemporaryNotification('✓ Auto-pasted to ChatGPT', 1000);
+                } else {
+                }
+              } catch (error) {
+              }
             }
             
             function copyToClipboard(text) {
@@ -234,11 +671,18 @@ const makeAppEvents = () => {
               // Try modern clipboard API first
               if (navigator.clipboard && navigator.clipboard.writeText) {
                 navigator.clipboard.writeText(text).then(() => {
-                  console.log('Auto-copied to clipboard:', text.substring(0, 50) + (text.length > 50 ? '...' : ''));
-                  showNotification('✓ Copied to clipboard');
+                  // Send message to main process to add clipboard item
+                  console.log(JSON.stringify({
+                    type: 'ADD_CLIPBOARD_ITEM',
+                    content: text
+                  }));
+                  
+                  // Show the actual copied text content
+                  const displayText = text.length > 20 ? text.substring(0, 20) + '...' : text;
+                  showNotification('✓ ' + displayText, text); // Pass the full text for auto-paste
+                  
                   isProcessing = false;
                 }).catch(err => {
-                  console.log('Clipboard API failed, trying fallback:', err);
                   fallbackCopy(text);
                 });
               } else {
@@ -260,14 +704,19 @@ const makeAppEvents = () => {
               try {
                 const successful = document.execCommand('copy');
                 if (successful) {
-                  console.log('Auto-copied to clipboard (fallback):', text.substring(0, 50) + (text.length > 50 ? '...' : ''));
-                  showNotification('✓ Copied to clipboard');
+                  // Send message to main process to add clipboard item
+                  console.log(JSON.stringify({
+                    type: 'ADD_CLIPBOARD_ITEM',
+                    content: text
+                  }));
+                  
+                  // Show the actual copied text content
+                  const displayText = text.length > 20 ? text.substring(0, 20) + '...' : text;
+                  showNotification('✓ ' + displayText, text); // Pass the full text for auto-paste
                 } else {
-                  console.log('Fallback copy failed');
                   showNotification('❌ Copy failed');
                 }
               } catch (err) {
-                console.log('Fallback copy error:', err);
                 showNotification('❌ Copy failed');
               } finally {
                 document.body.removeChild(textArea);
@@ -324,10 +773,55 @@ const makeAppEvents = () => {
               subtree: true
             });
             
-            // Test notification on load
-            setTimeout(() => {
-              showNotification('🎉 Auto-copy enabled! Select text to copy.');
-            }, 1000);
+            // Monitor clipboard changes for auto-paste
+            let lastClipboardContent = '';
+            let clipboardCheckInterval = null;
+            
+            function startClipboardMonitoring() {
+              if (clipboardCheckInterval) return;
+              
+              clipboardCheckInterval = setInterval(() => {
+                try {
+                  if (navigator.clipboard && navigator.clipboard.readText) {
+                    navigator.clipboard.readText().then(currentContent => {
+                      if (currentContent && 
+                          currentContent !== lastClipboardContent && 
+                          currentContent.length > 2) {
+                        lastClipboardContent = currentContent;
+                        
+                        // Clipboard monitoring is now disabled - auto-paste only happens on double-click
+                        // No automatic auto-paste functionality
+                      }
+                    }).catch(err => {
+                      // Ignore clipboard read errors (permissions, etc.)
+                    });
+                  }
+                } catch (error) {
+                }
+              }, 1000); // Check every second
+            }
+            
+            function stopClipboardMonitoring() {
+              if (clipboardCheckInterval) {
+                clearInterval(clipboardCheckInterval);
+                clipboardCheckInterval = null;
+              }
+            }
+            
+            // Start clipboard monitoring
+            startClipboardMonitoring();
+            
+            // Listen for clipboard item added events from main process
+            window.addEventListener('clipboard-item-added', (event) => {
+              const itemId = event.detail.id;
+              // Find the most recent notification and update it with the clipboard item ID
+              const notifications = document.querySelectorAll('.bonbon-notification');
+              if (notifications.length > 0) {
+                const latestNotification = notifications[notifications.length - 1];
+                latestNotification.setAttribute('data-clipboard-item-id', itemId);
+              }
+            });
+            
           })();
         `).catch(err => {
           // Ignore errors for pages that don't allow script execution

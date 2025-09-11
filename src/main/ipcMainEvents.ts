@@ -799,6 +799,20 @@ export const makeIpcMainEvents = (): void => {
   });
 
   /**
+   * Adds a new clipboard item
+   */
+  ipcMain.handle('add-clipboard-item', (_event, content: string) => {
+    try {
+      const { clipboardManager } = require('./clipboardManager');
+      const item = clipboardManager.addClipboardItem(content);
+      return { success: true, item };
+    } catch (error) {
+      console.error('[IPC] Error adding clipboard item:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  /**
    * Removes a specific clipboard item
    */
   ipcMain.handle('remove-clipboard-item', (_event, id: string) => {

@@ -386,6 +386,9 @@ contextBridge.exposeInMainWorld('app', {
     writeClipboard: (text: string): Promise<void> => {
       return ipcRenderer.invoke('write-clipboard', text);
     },
+    addClipboardItem: (content: string): Promise<{success: boolean, item?: {id: string, content: string, timestamp: number}, error?: string}> => {
+      return ipcRenderer.invoke('add-clipboard-item', content);
+    },
     getClipboardItems: (): Promise<{success: boolean, items?: Array<{id: string, content: string, timestamp: number}>, error?: string}> => {
       return ipcRenderer.invoke('get-clipboard-items');
     },
