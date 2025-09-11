@@ -45,16 +45,16 @@ export const startChatGPTClickListening = () => {
     if (chatgptClickTimeout) {
       clearTimeout(chatgptClickTimeout);
     }
-    
+
     // Set flag to indicate we're listening
     isListeningForChatGPTClick = true;
-    
+
     // Set timeout
     chatgptClickTimeout = setTimeout(() => {
       isListeningForChatGPTClick = false;
       chatgptClickTimeout = null;
     }, 3500);
-    
+
     return true;
   } catch (error) {
     console.error('Error starting ChatGPT click listening:', error);
@@ -83,30 +83,41 @@ export const focusChatGPTInput = () => {
   try {
     // Get all browser webviews
     const browsers = getBrowsers();
-    
-    // Find ChatGPT tab/webview
+
+    // Find ChatGPT tab/webview first, then Gemini as fallback
     let chatgptWebContents = null;
+    let geminiWebContents = null;
+
     for (const [, webContents] of Object.entries(browsers)) {
       const url = webContents.getURL();
       if (url.includes('chat.openai.com') || url.includes('chatgpt.com')) {
         chatgptWebContents = webContents;
         break;
+      } else if (url.includes('gemini.google.com')) {
+        geminiWebContents = webContents;
       }
     }
-    
-    if (chatgptWebContents) {
-      // First switch to the ChatGPT browser tab
+
+    // Use ChatGPT if available, otherwise fallback to Gemini
+    const targetWebContents = chatgptWebContents || geminiWebContents;
+    const serviceName = chatgptWebContents ? 'ChatGPT' : (geminiWebContents ? 'Gemini' : 'None');
+
+    // Log which service is being used
+    console.log(`Using ${serviceName} for input focus`);
+
+    if (targetWebContents) {
+      // First switch to the target browser tab
       const { getMainWindow } = require('./browser');
-      
+
       // Find the browser ID that corresponds to this webContents ID
       let targetBrowserId = null;
       for (const [browserId, webContents] of Object.entries(browsers)) {
-        if (webContents.id === chatgptWebContents.id) {
+        if (webContents.id === targetWebContents.id) {
           targetBrowserId = browserId;
           break;
         }
       }
-      
+
       if (targetBrowserId) {
         // Send message to renderer to switch to this browser
         const mainWindow = getMainWindow();
@@ -114,65 +125,200 @@ export const focusChatGPTInput = () => {
           mainWindow.webContents.send('switch-to-browser', { browserId: targetBrowserId });
         }
       }
-      
-      // Focus the ChatGPT webview
-      chatgptWebContents.focus();
-      
-      // Wait a moment for focus to take effect, then focus the input
-      setTimeout(() => {
-        chatgptWebContents.executeJavaScript(`
-          (() => {
-            try {
-              // ChatGPT input selectors
-              const chatgptSelectors = [
-                'div[contenteditable="true"][id="prompt-textarea"]',
-                'div[contenteditable="true"][id="prompt-textarea"].ProseMirror',
-                'textarea[placeholder*="Ask anything"]',
-                'textarea[placeholder*="ask anything"]', 
-                'textarea[placeholder*="Ask"]',
-                'textarea[placeholder*="ask"]',
-                'input[placeholder*="Ask anything"]',
-                'input[placeholder*="ask anything"]',
-                'input[placeholder*="Ask"]',
-                'input[placeholder*="ask"]',
-                'textarea[data-testid*="input"]',
-                'textarea[data-testid*="textbox"]',
-                'textarea[aria-label*="input"]',
-                'textarea[aria-label*="textbox"]',
-                'div[contenteditable="true"][data-testid*="input"]',
-                'div[contenteditable="true"][data-testid*="textbox"]'
-              ];
-              
-              let inputElement = null;
-              
-              // Try each selector
-              for (const selector of chatgptSelectors) {
-                inputElement = document.querySelector(selector);
-                if (inputElement) {
-                  break;
-                }
-              }
-              
-              if (inputElement) {
-                // Focus the input
-                inputElement.focus();
-                
-                // Scroll into view if needed
-                inputElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                
-                // Input focused successfully
-              }
-            } catch (error) {
-              console.error('Error focusing ChatGPT input:', error);
-            }
-          })();
-        `).catch((_err: any) => {
-          // Could not focus ChatGPT input
-        });
-      }, 100);
+
+      // Focus the target webview
+      targetWebContents.focus();
+
+       // Use pure JavaScript approach to find and focus the contenteditable element
+       // Add a small delay before executing JavaScript to ensure window is ready
+       setTimeout(() => {
+         console.log(`Finding and focusing contenteditable element for ${serviceName}`);
+         
+         targetWebContents.executeJavaScript(`
+           (() => {
+             try {
+               // Find contenteditable div element (Gemini input)
+               const contentEditableElement = document.querySelector('div[contenteditable="true"]');
+               
+               if (contentEditableElement) {
+                 console.log('Found contenteditable element:', contentEditableElement);
+                 
+                 // Focus the element
+                 contentEditableElement.focus();
+                 
+                 // Scroll into view if needed
+                 contentEditableElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                 
+                 // Type a space to activate the input and show cursor
+                 contentEditableElement.textContent = ' ';
+                 setTimeout(() => {
+                   contentEditableElement.textContent = '';
+                 }, 100);
+                 
+                 console.log('Successfully focused contenteditable element');
+                 return true;
+               } else {
+                 console.log('No contenteditable element found, trying fallback selectors');
+                 
+                 // Fallback: try common input selectors
+                 const fallbackSelectors = [
+                   'textarea[placeholder*="Enter a prompt"]',
+                   'textarea[placeholder*="Type a message"]',
+                   'textarea[placeholder*="Message"]',
+                   'textarea[placeholder*="Ask"]',
+                   'div[contenteditable="true"]',
+                   'textarea',
+                   'input[type="text"]'
+                 ];
+                 
+                 for (const selector of fallbackSelectors) {
+                   const element = document.querySelector(selector);
+                   if (element) {
+                     console.log('Found fallback element:', element);
+                     element.focus();
+                     element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                     
+                     // Type a space to activate the input and show cursor
+                     if (element.tagName === 'TEXTAREA' || element.tagName === 'INPUT') {
+                       element.value = ' ';
+                       setTimeout(() => {
+                         element.value = '';
+                       }, 100);
+                     } else if (element.contentEditable === 'true') {
+                       element.textContent = ' ';
+                       setTimeout(() => {
+                         element.textContent = '';
+                       }, 100);
+                     }
+                     
+                     console.log('Successfully focused fallback element');
+                     return true;
+                   }
+                 }
+                 
+                 console.log('No suitable input element found');
+                 return false;
+               }
+             } catch (error) {
+               console.error('Error focusing contenteditable element:', error);
+               return false;
+             }
+           })();
+         `).then((result: any) => {
+           if (result) {
+             console.log(`Successfully focused input area for ${serviceName} using contenteditable element`);
+           } else {
+             console.log(`Failed to focus input area for ${serviceName}, trying fallback method`);
+             fallbackFocusMethod(targetWebContents);
+           }
+         }).catch((_err: any) => {
+           console.error('JavaScript execution failed, trying fallback method');
+           fallbackFocusMethod(targetWebContents);
+         });
+       }, 100);
+    } else {
+      console.log('No AI service (ChatGPT or Gemini) found - cannot focus input');
     }
   } catch (error) {
-    console.error('Error focusing ChatGPT input:', error);
+    console.error('Error focusing AI service input:', error);
+  }
+};
+
+// Fallback method using the original JavaScript focus approach
+const fallbackFocusMethod = (targetWebContents: any) => {
+  try {
+    const browsers = getBrowsers();
+
+    // First switch to the target browser tab
+    const { getMainWindow } = require('./browser');
+
+    // Find the browser ID that corresponds to this webContents ID
+    let targetBrowserId = null;
+    for (const [browserId, webContents] of Object.entries(browsers)) {
+      if (webContents.id === targetWebContents.id) {
+        targetBrowserId = browserId;
+        break;
+      }
+    }
+
+    if (targetBrowserId) {
+      // Send message to renderer to switch to this browser
+      const mainWindow = getMainWindow();
+      if (mainWindow) {
+        mainWindow.webContents.send('switch-to-browser', { browserId: targetBrowserId });
+      }
+    }
+
+    // Focus the target webview
+    targetWebContents.focus();
+
+    // Wait a moment for focus to take effect, then focus the input
+    setTimeout(() => {
+      targetWebContents.executeJavaScript(`
+        (() => {
+          try {
+            // AI service input selectors (ChatGPT and Gemini)
+            const aiServiceSelectors = [
+              // ChatGPT selectors
+              'div[contenteditable="true"][id="prompt-textarea"]',
+              'div[contenteditable="true"][id="prompt-textarea"].ProseMirror',
+              'textarea[placeholder*="Ask anything"]',
+              'textarea[placeholder*="ask anything"]', 
+              'textarea[placeholder*="Ask"]',
+              'textarea[placeholder*="ask"]',
+              'input[placeholder*="Ask anything"]',
+              'input[placeholder*="ask anything"]',
+              'input[placeholder*="Ask"]',
+              'input[placeholder*="ask"]',
+              'textarea[data-testid*="input"]',
+              'textarea[data-testid*="textbox"]',
+              'textarea[aria-label*="input"]',
+              'textarea[aria-label*="textbox"]',
+              'div[contenteditable="true"][data-testid*="input"]',
+              'div[contenteditable="true"][data-testid*="textbox"]',
+              // Gemini selectors
+              'textarea[placeholder*="Enter a prompt"]',
+              'textarea[placeholder*="enter a prompt"]',
+              'textarea[placeholder*="Type a message"]',
+              'textarea[placeholder*="type a message"]',
+              'textarea[placeholder*="Message"]',
+              'textarea[placeholder*="message"]',
+              'div[contenteditable="true"][data-testid*="prompt"]',
+              'div[contenteditable="true"][aria-label*="prompt"]',
+              'div[contenteditable="true"][aria-label*="message"]',
+              'textarea[aria-label*="prompt"]',
+              'textarea[aria-label*="message"]'
+            ];
+            
+            let inputElement = null;
+            
+            // Try each selector
+            for (const selector of aiServiceSelectors) {
+              inputElement = document.querySelector(selector);
+              if (inputElement) {
+                break;
+              }
+            }
+            
+            if (inputElement) {
+              // Focus the input
+              inputElement.focus();
+              
+              // Scroll into view if needed
+              inputElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              
+              // Input focused successfully
+            }
+          } catch (error) {
+            console.error('Error focusing AI service input:', error);
+          }
+        })();
+      `).catch((_err: any) => {
+        // Could not focus AI service input
+      });
+    }, 100);
+  } catch (error) {
+    console.error('Error in fallback focus method:', error);
   }
 };
 
@@ -248,36 +394,49 @@ const setupChatGPTInputClickDetection = (webContents: any) => {
   });
 };
 
-// Function to switch focus to ChatGPT and paste content
+// Function to switch focus to AI service and paste content (ChatGPT with Gemini fallback)
 const switchToChatGPTAndPaste = (content: string) => {
   try {
     // Get all browser webviews
     const browsers = getBrowsers();
-    
-    // Find ChatGPT tab/webview
+
+    // Find ChatGPT tab/webview first, then Gemini as fallback
     let chatgptWebContents = null;
+    let geminiWebContents = null;
+
     for (const [, webContents] of Object.entries(browsers)) {
       const url = webContents.getURL();
       if (url.includes('chat.openai.com') || url.includes('chatgpt.com')) {
         chatgptWebContents = webContents;
         break;
+      } else if (url.includes('gemini.google.com')) {
+        geminiWebContents = webContents;
       }
     }
-    
-    if (chatgptWebContents) {
-      // Focus the ChatGPT webview
-      chatgptWebContents.focus();
-      
-      // Wait a moment for focus to take effect, then paste the content
+
+    // Use ChatGPT if available, otherwise fallback to Gemini
+    const targetWebContents = chatgptWebContents || geminiWebContents;
+    const serviceName = chatgptWebContents ? 'ChatGPT' : (geminiWebContents ? 'Gemini' : 'None');
+
+    // Log which service is being used
+    console.log(`Using ${serviceName} for content paste`);
+
+    if (targetWebContents) {
+      // First, focus the input area using AppleScript
+      console.log(`Focusing input area for ${serviceName} before pasting content`);
+      focusChatGPTInput();
+
+      // Wait longer for AppleScript focus to take effect, then paste the content
       setTimeout(() => {
         // Escape the content properly for JavaScript execution
         const escapedContent = content.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"').replace(/\n/g, '\\n').replace(/\r/g, '\\r');
-        
-        chatgptWebContents.executeJavaScript(`
+
+        targetWebContents.executeJavaScript(`
           (() => {
             try {
-              // Look for ChatGPT input field with various selectors
-              const chatgptSelectors = [
+              // Look for AI service input field with various selectors (ChatGPT and Gemini)
+              const aiServiceSelectors = [
+                // ChatGPT selectors
                 'div[contenteditable="true"][id="prompt-textarea"]',
                 'div[contenteditable="true"][id="prompt-textarea"].ProseMirror',
                 'textarea[placeholder*="Ask anything"]',
@@ -293,20 +452,32 @@ const switchToChatGPTAndPaste = (content: string) => {
                 'textarea[aria-label*="input"]',
                 'textarea[aria-label*="textbox"]',
                 'div[contenteditable="true"][data-testid*="input"]',
-                'div[contenteditable="true"][data-testid*="textbox"]'
+                'div[contenteditable="true"][data-testid*="textbox"]',
+                // Gemini selectors
+                'textarea[placeholder*="Enter a prompt"]',
+                'textarea[placeholder*="enter a prompt"]',
+                'textarea[placeholder*="Type a message"]',
+                'textarea[placeholder*="type a message"]',
+                'textarea[placeholder*="Message"]',
+                'textarea[placeholder*="message"]',
+                'div[contenteditable="true"][data-testid*="prompt"]',
+                'div[contenteditable="true"][aria-label*="prompt"]',
+                'div[contenteditable="true"][aria-label*="message"]',
+                'textarea[aria-label*="prompt"]',
+                'textarea[aria-label*="message"]'
               ];
               
               let inputElement = null;
               
               // Try each selector
-              for (const selector of chatgptSelectors) {
+              for (const selector of aiServiceSelectors) {
                 inputElement = document.querySelector(selector);
                 if (inputElement) {
                   break;
                 }
               }
               
-              // If no specific ChatGPT input found, look for any textarea or input that might be a chat input
+              // If no specific AI service input found, look for any textarea or input that might be a chat input
               if (!inputElement) {
                 const allInputs = document.querySelectorAll('textarea, input[type="text"]');
                 for (const input of allInputs) {
@@ -318,8 +489,11 @@ const switchToChatGPTAndPaste = (content: string) => {
                   if (placeholder.includes('ask') || 
                       placeholder.includes('message') || 
                       placeholder.includes('chat') ||
+                      placeholder.includes('prompt') ||
                       ariaLabel.includes('input') ||
                       ariaLabel.includes('textbox') ||
+                      ariaLabel.includes('prompt') ||
+                      ariaLabel.includes('message') ||
                       className.includes('input') ||
                       className.includes('textbox')) {
                     inputElement = input;
@@ -355,7 +529,7 @@ const switchToChatGPTAndPaste = (content: string) => {
                 
                 // Show a temporary notification
                 const notification = document.createElement('div');
-                notification.textContent = '✓ Content appended to ChatGPT';
+                notification.textContent = '✓ Content appended to ${serviceName}';
                 notification.style.cssText = \`
                   position: fixed;
                   top: 20px;
@@ -394,13 +568,15 @@ const switchToChatGPTAndPaste = (content: string) => {
                 }, 2000);
               }
             } catch (error) {
-              console.error('Error in ChatGPT paste script:', error);
+              console.error('Error in AI service paste script:', error);
             }
           })();
         `).catch(() => {
           // Silently handle errors to avoid console spam
         });
-      }, 500); // Wait 500ms for focus to take effect
+      }, 500); // Wait longer for AppleScript focus to take effect
+    } else {
+      console.log('No AI service (ChatGPT or Gemini) found - cannot paste content');
     }
   } catch (error) {
     // Silently handle errors
@@ -522,12 +698,12 @@ const makeAppEvents = () => {
     contents.on('did-attach-webview', (_daw, webContents) => {
       getBrowsers()[webContents.id] = webContents;
       webContents.session.setMaxListeners(99);
-      
+
       // Set up ChatGPT input click detection when webview is ready
       webContents.once('dom-ready', () => {
         setupChatGPTInputClickDetection(webContents);
       });
-      
+
       // Listen for custom messages from the webview
       webContents.addListener('console-message', (_event, _level, message) => {
         try {
@@ -562,7 +738,7 @@ const makeAppEvents = () => {
           // Ignore non-JSON messages
         }
       });
-      
+
       webContents.addListener('dom-ready', () => {
         if (webContents.getURL() === 'https://web.whatsapp.com/') {
           webContents.setUserAgent(
@@ -1099,12 +1275,12 @@ app
           .fromPartition('persist:user-partition')
           .setPermissionRequestHandler((webContents, permission, callback) => {
             const url = webContents.getURL();
-            
+
             // Allow permissions for localhost (app UI)
             if (url === 'http://localhost:1212/index.html') {
               return callback(true);
             }
-            
+
             // Allow essential permissions for web browsing
             const allowedPermissions = [
               'fullscreen',
@@ -1115,14 +1291,14 @@ app
               'clipboard-read', // For clipboard access
               'clipboard-write' // For clipboard writing
             ];
-            
+
             if (allowedPermissions.includes(permission)) {
               // For microphone permissions, temporarily disable click-through
               if (permission === 'media') {
                 const { globalShortcutsHelper } = require('./globalShortcuts');
                 globalShortcutsHelper.disableClickThrough();
                 console.log('Microphone permission requested - temporarily disabled click-through for voice interaction');
-                
+
                 // Re-enable click-through after 30 seconds if user doesn't interact
                 setTimeout(() => {
                   if (!globalShortcutsHelper.getClickThroughState()) {
@@ -1131,10 +1307,10 @@ app
                   }
                 }, 30000);
               }
-              
+
               return callback(true);
             }
-            
+
             // Block other permissions
             return callback(false);
           });

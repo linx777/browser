@@ -281,6 +281,13 @@ export class GlobalShortcutsHelper {
    */
   private async takeScreenshot(): Promise<void> {
     try {
+      // First focus the AI service input area before taking screenshot
+      console.log('Focusing AI service input before taking screenshot');
+      this.focusChatGPTInput();
+      
+      // Wait a moment for focus to take effect
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
       const { screenshotHelper } = require('./screenshotHelper');
       const screenshotPath = await screenshotHelper.takeScreenshot(this.mainWindow, {
         hideWindow: true,
