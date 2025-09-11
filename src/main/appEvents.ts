@@ -53,136 +53,140 @@ const switchToChatGPTAndPaste = (content: string) => {
       
       // Wait a moment for focus to take effect, then paste the content
       setTimeout(() => {
+        // Escape the content properly for JavaScript execution
+        const escapedContent = content.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"').replace(/\n/g, '\\n').replace(/\r/g, '\\r');
+        
         chatgptWebContents.executeJavaScript(`
           (() => {
-            // Look for ChatGPT input field with various selectors
-            const chatgptSelectors = [
-              'div[contenteditable="true"][id="prompt-textarea"]',
-              'div[contenteditable="true"][id="prompt-textarea"].ProseMirror',
-              'textarea[placeholder*="Ask anything"]',
-              'textarea[placeholder*="ask anything"]', 
-              'textarea[placeholder*="Ask"]',
-              'textarea[placeholder*="ask"]',
-              'input[placeholder*="Ask anything"]',
-              'input[placeholder*="ask anything"]',
-              'input[placeholder*="Ask"]',
-              'input[placeholder*="ask"]',
-              'textarea[data-testid*="input"]',
-              'textarea[data-testid*="textbox"]',
-              'textarea[aria-label*="input"]',
-              'textarea[aria-label*="textbox"]',
-              'div[contenteditable="true"][data-testid*="input"]',
-              'div[contenteditable="true"][data-testid*="textbox"]'
-            ];
-            
-            let inputElement = null;
-            
-            // Try each selector
-            for (const selector of chatgptSelectors) {
-              inputElement = document.querySelector(selector);
-              if (inputElement) {
-                break;
-              }
-            }
-            
-            // If no specific ChatGPT input found, look for any textarea or input that might be a chat input
-            if (!inputElement) {
-              const allInputs = document.querySelectorAll('textarea, input[type="text"]');
-              for (const input of allInputs) {
-                const placeholder = input.placeholder?.toLowerCase() || '';
-                const ariaLabel = input.getAttribute('aria-label')?.toLowerCase() || '';
-                const className = input.className?.toLowerCase() || '';
-                
-                // Check if this looks like a chat input
-                if (placeholder.includes('ask') || 
-                    placeholder.includes('message') || 
-                    placeholder.includes('chat') ||
-                    ariaLabel.includes('input') ||
-                    ariaLabel.includes('textbox') ||
-                    className.includes('input') ||
-                    className.includes('textbox')) {
-                  inputElement = input;
+            try {
+              // Look for ChatGPT input field with various selectors
+              const chatgptSelectors = [
+                'div[contenteditable="true"][id="prompt-textarea"]',
+                'div[contenteditable="true"][id="prompt-textarea"].ProseMirror',
+                'textarea[placeholder*="Ask anything"]',
+                'textarea[placeholder*="ask anything"]', 
+                'textarea[placeholder*="Ask"]',
+                'textarea[placeholder*="ask"]',
+                'input[placeholder*="Ask anything"]',
+                'input[placeholder*="ask anything"]',
+                'input[placeholder*="Ask"]',
+                'input[placeholder*="ask"]',
+                'textarea[data-testid*="input"]',
+                'textarea[data-testid*="textbox"]',
+                'textarea[aria-label*="input"]',
+                'textarea[aria-label*="textbox"]',
+                'div[contenteditable="true"][data-testid*="input"]',
+                'div[contenteditable="true"][data-testid*="textbox"]'
+              ];
+              
+              let inputElement = null;
+              
+              // Try each selector
+              for (const selector of chatgptSelectors) {
+                inputElement = document.querySelector(selector);
+                if (inputElement) {
                   break;
                 }
               }
-            }
-            
-            if (inputElement) {
-              // Check if the input already has the same content to avoid unnecessary updates
-              const currentValue = inputElement.tagName === 'TEXTAREA' || inputElement.tagName === 'INPUT' 
-                ? inputElement.value 
-                : inputElement.textContent;
               
-              if (currentValue === '${content.replace(/'/g, "\\'")}') {
-                return;
-              }
-              
-              // Focus the input
-              inputElement.focus();
-              
-              // Clear existing content and set new content
-              if (inputElement.tagName === 'TEXTAREA' || inputElement.tagName === 'INPUT') {
-                inputElement.value = '${content.replace(/'/g, "\\'")}';
-              } else if (inputElement.contentEditable === 'true') {
-                inputElement.textContent = '${content.replace(/'/g, "\\'")}';
-              }
-              
-              // Trigger input events to ensure the content is properly set
-              const inputEvent = new Event('input', { bubbles: true });
-              const changeEvent = new Event('change', { bubbles: true });
-              inputElement.dispatchEvent(inputEvent);
-              inputElement.dispatchEvent(changeEvent);
-              
-              // Show a temporary notification
-              const notification = document.createElement('div');
-              notification.textContent = '✓ Auto-pasted to ChatGPT';
-              notification.style.cssText = \`
-                position: fixed;
-                top: 20px;
-                right: 20px;
-                background: rgba(0, 0, 0, 0.9);
-                color: white;
-                padding: 12px 16px;
-                border-radius: 6px;
-                font-size: 14px;
-                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                z-index: 2147483647;
-                pointer-events: none;
-                transition: all 0.3s ease;
-                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-                border: 1px solid rgba(255, 255, 255, 0.1);
-                cursor: default !important;
-                max-width: 300px;
-                word-wrap: break-word;
-                user-select: none;
-                -webkit-user-select: none;
-                -moz-user-select: none;
-                -ms-user-select: none;
-              \`;
-              
-              document.body.appendChild(notification);
-              
-              // Auto-remove after 2 seconds
-              setTimeout(() => {
-                notification.style.opacity = '0';
-                notification.style.transform = 'translateX(100%)';
-                setTimeout(() => {
-                  if (notification.parentNode) {
-                    notification.parentNode.removeChild(notification);
+              // If no specific ChatGPT input found, look for any textarea or input that might be a chat input
+              if (!inputElement) {
+                const allInputs = document.querySelectorAll('textarea, input[type="text"]');
+                for (const input of allInputs) {
+                  const placeholder = input.placeholder?.toLowerCase() || '';
+                  const ariaLabel = input.getAttribute('aria-label')?.toLowerCase() || '';
+                  const className = input.className?.toLowerCase() || '';
+                  
+                  // Check if this looks like a chat input
+                  if (placeholder.includes('ask') || 
+                      placeholder.includes('message') || 
+                      placeholder.includes('chat') ||
+                      ariaLabel.includes('input') ||
+                      ariaLabel.includes('textbox') ||
+                      className.includes('input') ||
+                      className.includes('textbox')) {
+                    inputElement = input;
+                    break;
                   }
-                }, 300);
-              }, 2000);
+                }
+              }
+              
+              if (inputElement) {
+                // Focus the input
+                inputElement.focus();
+                
+                // Get current content
+                const currentValue = inputElement.tagName === 'TEXTAREA' || inputElement.tagName === 'INPUT' 
+                  ? inputElement.value 
+                  : inputElement.textContent;
+                
+                // Append new content to existing content with comma separator
+                const newContent = currentValue ? currentValue + ', ' + '${escapedContent}' : '${escapedContent}';
+                
+                // Set the combined content
+                if (inputElement.tagName === 'TEXTAREA' || inputElement.tagName === 'INPUT') {
+                  inputElement.value = newContent;
+                } else if (inputElement.contentEditable === 'true') {
+                  inputElement.textContent = newContent;
+                }
+                
+                // Trigger input events to ensure the content is properly set
+                const inputEvent = new Event('input', { bubbles: true });
+                const changeEvent = new Event('change', { bubbles: true });
+                inputElement.dispatchEvent(inputEvent);
+                inputElement.dispatchEvent(changeEvent);
+                
+                // Show a temporary notification
+                const notification = document.createElement('div');
+                notification.textContent = '✓ Content appended to ChatGPT';
+                notification.style.cssText = \`
+                  position: fixed;
+                  top: 20px;
+                  right: 20px;
+                  background: rgba(0, 0, 0, 0.9);
+                  color: white;
+                  padding: 12px 16px;
+                  border-radius: 6px;
+                  font-size: 14px;
+                  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                  z-index: 2147483647;
+                  pointer-events: none;
+                  transition: all 0.3s ease;
+                  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+                  border: 1px solid rgba(255, 255, 255, 0.1);
+                  cursor: default !important;
+                  max-width: 300px;
+                  word-wrap: break-word;
+                  user-select: none;
+                  -webkit-user-select: none;
+                  -moz-user-select: none;
+                  -ms-user-select: none;
+                \`;
+                
+                document.body.appendChild(notification);
+                
+                // Auto-remove after 2 seconds
+                setTimeout(() => {
+                  notification.style.opacity = '0';
+                  notification.style.transform = 'translateX(100%)';
+                  setTimeout(() => {
+                    if (notification.parentNode) {
+                      notification.parentNode.removeChild(notification);
+                    }
+                  }, 300);
+                }, 2000);
+              }
+            } catch (error) {
+              console.error('Error in ChatGPT paste script:', error);
             }
           })();
-        `).catch(err => {
-          console.error('Error pasting to ChatGPT:', err);
+        `).catch(() => {
+          // Silently handle errors to avoid console spam
         });
       }, 500); // Wait 500ms for focus to take effect
-    } else {
-      console.log('ChatGPT tab not found');
     }
   } catch (error) {
-    console.error('Error switching to ChatGPT:', error);
+    // Silently handle errors
   }
 };
 
@@ -575,93 +579,6 @@ const makeAppEvents = () => {
               
               // Clean up old notifications to prevent accumulation
               cleanupOldNotifications();
-            }
-            
-            function autoPasteToChatGPT(text) {
-              try {
-                // Look for ChatGPT input field with various selectors
-                const chatgptSelectors = [
-                  'div[contenteditable="true"][id="prompt-textarea"]',
-                  'div[contenteditable="true"][id="prompt-textarea"].ProseMirror',
-                  'textarea[placeholder*="Ask anything"]',
-                  'textarea[placeholder*="ask anything"]', 
-                  'textarea[placeholder*="Ask"]',
-                  'textarea[placeholder*="ask"]',
-                  'input[placeholder*="Ask anything"]',
-                  'input[placeholder*="ask anything"]',
-                  'input[placeholder*="Ask"]',
-                  'input[placeholder*="ask"]',
-                  'textarea[data-testid*="input"]',
-                  'textarea[data-testid*="textbox"]',
-                  'textarea[aria-label*="input"]',
-                  'textarea[aria-label*="textbox"]',
-                  'div[contenteditable="true"][data-testid*="input"]',
-                  'div[contenteditable="true"][data-testid*="textbox"]'
-                ];
-                
-                let inputElement = null;
-                
-                // Try each selector
-                for (const selector of chatgptSelectors) {
-                  inputElement = document.querySelector(selector);
-                  if (inputElement) {
-                    break;
-                  }
-                }
-                
-                // If no specific ChatGPT input found, look for any textarea or input that might be a chat input
-                if (!inputElement) {
-                  const allInputs = document.querySelectorAll('textarea, input[type="text"]');
-                  for (const input of allInputs) {
-                    const placeholder = input.placeholder?.toLowerCase() || '';
-                    const ariaLabel = input.getAttribute('aria-label')?.toLowerCase() || '';
-                    const className = input.className?.toLowerCase() || '';
-                    
-                    // Check if this looks like a chat input
-                    if (placeholder.includes('ask') || 
-                        placeholder.includes('message') || 
-                        placeholder.includes('chat') ||
-                        ariaLabel.includes('input') ||
-                        ariaLabel.includes('textbox') ||
-                        className.includes('input') ||
-                        className.includes('textbox')) {
-                      inputElement = input;
-                      break;
-                    }
-                  }
-                }
-                
-                if (inputElement) {
-                  // Check if the input already has the same content to avoid unnecessary updates
-                  const currentValue = inputElement.tagName === 'TEXTAREA' || inputElement.tagName === 'INPUT' 
-                    ? inputElement.value 
-                    : inputElement.textContent;
-                  
-                  if (currentValue === text) {
-                    return;
-                  }
-                  
-                  // Focus the input
-                  inputElement.focus();
-                  
-                  // Clear existing content and set new content
-                  if (inputElement.tagName === 'TEXTAREA' || inputElement.tagName === 'INPUT') {
-                    inputElement.value = text;
-                  } else if (inputElement.contentEditable === 'true') {
-                    inputElement.textContent = text;
-                  }
-                  
-                  // Trigger input events to ensure the content is properly set
-                  const inputEvent = new Event('input', { bubbles: true });
-                  const changeEvent = new Event('change', { bubbles: true });
-                  inputElement.dispatchEvent(inputEvent);
-                  inputElement.dispatchEvent(changeEvent);
-                  
-                  showTemporaryNotification('✓ Auto-pasted to ChatGPT', 1000);
-                } else {
-                }
-              } catch (error) {
-              }
             }
             
             function copyToClipboard(text) {
