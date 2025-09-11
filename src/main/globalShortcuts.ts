@@ -94,6 +94,13 @@ export class GlobalShortcutsHelper {
       await this.takeScreenshot();
     });
 
+    // Focus ChatGPT input shortcut
+    globalShortcut.register('CommandOrControl+W', () => {
+      console.log('Command/Ctrl + W pressed. Focusing ChatGPT input.');
+      this.focusChatGPTInput();
+    });
+
+
     console.log('Global shortcuts registered successfully');
   }
 
@@ -279,10 +286,55 @@ export class GlobalShortcutsHelper {
         hideWindow: true,
         format: 'png'
       });
+      
+      if (screenshotPath) {
+        // Copy screenshot to clipboard
+        try {
+          const { clipboard } = require('electron');
+          const fs = require('fs');
+          
+          // Read the image file
+          const imageBuffer = fs.readFileSync(screenshotPath);
+          
+          // Create a native image from buffer
+          const { nativeImage } = require('electron');
+          const image = nativeImage.createFromBuffer(imageBuffer);
+          
+          // Copy to clipboard
+          clipboard.writeImage(image);
+          
+          // Automatically simulate Cmd+V paste
+          setTimeout(() => {
+            try {
+              const { simulatePasteWithGlobalShortcut } = require('./keyboardSimulation');
+              simulatePasteWithGlobalShortcut();
+            } catch (pasteError) {
+              console.error('Error simulating paste:', pasteError);
+            }
+          }, 100); // Delay to ensure clipboard is ready
+          
+        } catch (clipboardError) {
+          console.error('Error copying screenshot to clipboard:', clipboardError);
+        }
+      }
     } catch (error) {
       console.error('Error taking screenshot:', error);
     }
   }
+
+  /**
+   * Focuses ChatGPT input area
+   */
+  private focusChatGPTInput(): void {
+    try {
+      // Import the function from appEvents
+      const { focusChatGPTInput } = require('./appEvents');
+      focusChatGPTInput();
+    } catch (error) {
+      console.error('Error focusing ChatGPT input:', error);
+    }
+  }
+
 }
 
 // Export a singleton instance

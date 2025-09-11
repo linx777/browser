@@ -61,11 +61,29 @@ const ScreenshotToast: React.FC<ScreenshotToastProps> = ({
   };
 
 
+  const handleSingleClick = async () => {
+    try {
+      await window.app.clipboard.copyImageToClipboard(screenshot.path);
+      console.log('Screenshot copied to clipboard');
+      
+      // Start listening for ChatGPT input clicks with timeout
+      await window.app.browser.startChatGPTClickListening();
+    } catch (error) {
+      console.error('Error copying screenshot to clipboard:', error);
+    }
+  };
+
+
   return (
     <div className="screenshot-toast">
 
       <div className="screenshot-toast-content">
-        <div className="screenshot-preview">
+        <div 
+          className="screenshot-preview"
+          onClick={handleSingleClick}
+          style={{ cursor: 'pointer' }}
+          title="Click to copy image to clipboard"
+        >
           {loading ? (
             <div className="screenshot-loading">
               <div className="loading-spinner" />

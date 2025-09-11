@@ -84,9 +84,17 @@ const ScreenshotToastManager: React.FC = () => {
 
   const handleOpenScreenshot = useCallback((path: string) => {
     try {
-      window.electron?.shell?.openPath(path);
+      // Use the proper API to open file
+      window.app.tools.showItemInFolder(path);
     } catch (error) {
       console.error('Error opening screenshot:', error);
+    }
+  }, []);
+
+
+  const handleCopyFilenameToChatGPT = useCallback((filename: string) => {
+    if (window.app) {
+      window.app.tools.copyFilenameToChatGPT?.(filename);
     }
   }, []);
 
@@ -113,6 +121,7 @@ const ScreenshotToastManager: React.FC = () => {
               onClose={() => removeToast(toast.id)}
               onDelete={handleDeleteScreenshot}
               onOpen={handleOpenScreenshot}
+              onCopyFilenameToChatGPT={handleCopyFilenameToChatGPT}
             />
           </div>
         );

@@ -4,7 +4,7 @@
 /* eslint-disable promise/no-callback-in-promise */
 /* eslint-disable promise/no-nesting */
 /* eslint-disable promise/always-return */
-import { app, session } from 'electron';
+import { app, session, ipcMain } from 'electron';
 import contextMenu from 'electron-context-menu';
 import path from 'path';
 
@@ -30,6 +30,221 @@ import {
 } from './ipcMainEvents';
 import { isValidUrl } from './util';
 import Tracker from './analytics/tracker';
+
+// Global variables for ChatGPT input click detection
+let chatgptClickTimeout: NodeJS.Timeout | null = null;
+let isListeningForChatGPTClick = false;
+
+
+// Function to start listening for ChatGPT input clicks with timeout
+export const startChatGPTClickListening = () => {
+  try {
+    // Clear any existing timeout
+    if (chatgptClickTimeout) {
+      clearTimeout(chatgptClickTimeout);
+    }
+    
+    // Set flag to indicate we're listening
+    isListeningForChatGPTClick = true;
+    
+    // Set timeout
+    chatgptClickTimeout = setTimeout(() => {
+      isListeningForChatGPTClick = false;
+      chatgptClickTimeout = null;
+    }, 3500);
+    
+    return true;
+  } catch (error) {
+    console.error('Error starting ChatGPT click listening:', error);
+    return false;
+  }
+};
+
+// Function to stop listening for ChatGPT input clicks
+export const stopChatGPTClickListening = () => {
+  try {
+    if (chatgptClickTimeout) {
+      clearTimeout(chatgptClickTimeout);
+      chatgptClickTimeout = null;
+    }
+    isListeningForChatGPTClick = false;
+    return true;
+  } catch (error) {
+    console.error('Error stopping ChatGPT click listening:', error);
+    return false;
+  }
+};
+
+
+// Function to focus ChatGPT input area
+export const focusChatGPTInput = () => {
+  try {
+    // Get all browser webviews
+    const browsers = getBrowsers();
+    
+    // Find ChatGPT tab/webview
+    let chatgptWebContents = null;
+    for (const [, webContents] of Object.entries(browsers)) {
+      const url = webContents.getURL();
+      if (url.includes('chat.openai.com') || url.includes('chatgpt.com')) {
+        chatgptWebContents = webContents;
+        break;
+      }
+    }
+    
+    if (chatgptWebContents) {
+      // First switch to the ChatGPT browser tab
+      const { getMainWindow } = require('./browser');
+      
+      // Find the browser ID that corresponds to this webContents ID
+      let targetBrowserId = null;
+      for (const [browserId, webContents] of Object.entries(browsers)) {
+        if (webContents.id === chatgptWebContents.id) {
+          targetBrowserId = browserId;
+          break;
+        }
+      }
+      
+      if (targetBrowserId) {
+        // Send message to renderer to switch to this browser
+        const mainWindow = getMainWindow();
+        if (mainWindow) {
+          mainWindow.webContents.send('switch-to-browser', { browserId: targetBrowserId });
+        }
+      }
+      
+      // Focus the ChatGPT webview
+      chatgptWebContents.focus();
+      
+      // Wait a moment for focus to take effect, then focus the input
+      setTimeout(() => {
+        chatgptWebContents.executeJavaScript(`
+          (() => {
+            try {
+              // ChatGPT input selectors
+              const chatgptSelectors = [
+                'div[contenteditable="true"][id="prompt-textarea"]',
+                'div[contenteditable="true"][id="prompt-textarea"].ProseMirror',
+                'textarea[placeholder*="Ask anything"]',
+                'textarea[placeholder*="ask anything"]', 
+                'textarea[placeholder*="Ask"]',
+                'textarea[placeholder*="ask"]',
+                'input[placeholder*="Ask anything"]',
+                'input[placeholder*="ask anything"]',
+                'input[placeholder*="Ask"]',
+                'input[placeholder*="ask"]',
+                'textarea[data-testid*="input"]',
+                'textarea[data-testid*="textbox"]',
+                'textarea[aria-label*="input"]',
+                'textarea[aria-label*="textbox"]',
+                'div[contenteditable="true"][data-testid*="input"]',
+                'div[contenteditable="true"][data-testid*="textbox"]'
+              ];
+              
+              let inputElement = null;
+              
+              // Try each selector
+              for (const selector of chatgptSelectors) {
+                inputElement = document.querySelector(selector);
+                if (inputElement) {
+                  break;
+                }
+              }
+              
+              if (inputElement) {
+                // Focus the input
+                inputElement.focus();
+                
+                // Scroll into view if needed
+                inputElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                
+                // Input focused successfully
+              }
+            } catch (error) {
+              console.error('Error focusing ChatGPT input:', error);
+            }
+          })();
+        `).catch((_err: any) => {
+          // Could not focus ChatGPT input
+        });
+      }, 100);
+    }
+  } catch (error) {
+    console.error('Error focusing ChatGPT input:', error);
+  }
+};
+
+// Function to detect ChatGPT input clicks and auto-paste
+const setupChatGPTInputClickDetection = (webContents: any) => {
+  const url = webContents.getURL();
+  if (!url.includes('chat.openai.com') && !url.includes('chatgpt.com')) {
+    return;
+  }
+
+  // Inject click detection script into ChatGPT pages
+  webContents.executeJavaScript(`
+    (() => {
+      // ChatGPT input selectors
+      const chatgptSelectors = [
+        'div[contenteditable="true"][id="prompt-textarea"]',
+        'div[contenteditable="true"][id="prompt-textarea"].ProseMirror',
+        'textarea[placeholder*="Ask anything"]',
+        'textarea[placeholder*="ask anything"]', 
+        'textarea[placeholder*="Ask"]',
+        'textarea[placeholder*="ask"]',
+        'input[placeholder*="Ask anything"]',
+        'input[placeholder*="ask anything"]',
+        'input[placeholder*="Ask"]',
+        'input[placeholder*="ask"]',
+        'textarea[data-testid*="input"]',
+        'textarea[data-testid*="textbox"]',
+        'textarea[aria-label*="input"]',
+        'textarea[aria-label*="textbox"]',
+        'div[contenteditable="true"][data-testid*="input"]',
+        'div[contenteditable="true"][data-testid*="textbox"]'
+      ];
+      
+      // Function to check if element matches ChatGPT input selectors
+      function isChatGPTInput(element) {
+        if (!element) return false;
+        
+        for (const selector of chatgptSelectors) {
+          if (element.matches && element.matches(selector)) {
+            return true;
+          }
+        }
+        
+        // Check parent elements
+        let parent = element.parentElement;
+        while (parent && parent !== document.body) {
+          for (const selector of chatgptSelectors) {
+            if (parent.matches && parent.matches(selector)) {
+              return true;
+            }
+          }
+          parent = parent.parentElement;
+        }
+        
+        return false;
+      }
+      
+      // Add click listener to document
+      document.addEventListener('click', (event) => {
+        if (isChatGPTInput(event.target)) {
+          // Send message to main process to trigger paste
+          console.log(JSON.stringify({
+            type: 'CHATGPT_INPUT_CLICKED',
+            action: 'simulate_paste'
+          }));
+        }
+      }, true); // Use capture phase to catch clicks early
+      
+      // ChatGPT input click detection enabled
+    })();
+  `).catch((_err: any) => {
+    // Could not inject ChatGPT click detection
+  });
+};
 
 // Function to switch focus to ChatGPT and paste content
 const switchToChatGPTAndPaste = (content: string) => {
@@ -228,9 +443,16 @@ const makeAppEvents = () => {
 
   if (!gotTheLock) app.quit();
 
+
+  // Listen for copy filename to ChatGPT
+  ipcMain.on('copy-filename-to-chatgpt', (_event, filename: string) => {
+    switchToChatGPTAndPaste(filename);
+  });
+
   app.on('before-quit', () => {
     tracker.cleanup();
   });
+
 
   app.on('second-instance', (_e, argv) => {
     const mainWindow = getMainWindow();
@@ -299,6 +521,11 @@ const makeAppEvents = () => {
       getBrowsers()[webContents.id] = webContents;
       webContents.session.setMaxListeners(99);
       
+      // Set up ChatGPT input click detection when webview is ready
+      webContents.once('dom-ready', () => {
+        setupChatGPTInputClickDetection(webContents);
+      });
+      
       // Listen for custom messages from the webview
       webContents.addListener('console-message', (_event, _level, message) => {
         try {
@@ -320,6 +547,14 @@ const makeAppEvents = () => {
           } else if (data.type === 'SWITCH_TO_CHATGPT_AND_PASTE' && data.content) {
             // Switch focus to ChatGPT and paste content
             switchToChatGPTAndPaste(data.content);
+          } else if (data.type === 'CHATGPT_INPUT_CLICKED' && data.action === 'simulate_paste') {
+            // Only simulate paste if we're currently listening
+            if (isListeningForChatGPTClick) {
+              // Use the webContents that sent the message directly
+              webContents.paste();
+              // Stop listening after successful paste
+              stopChatGPTClickListening();
+            }
           }
         } catch (error) {
           // Ignore non-JSON messages

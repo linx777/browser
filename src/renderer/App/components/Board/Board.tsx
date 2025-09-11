@@ -166,6 +166,18 @@ export const Board = ({ isFullSize, boardId }: BoardProps) => {
     return () => window.app.off.saveBoard();
   }, [saveBoardAction]);
 
+  // Listen for switch-to-browser messages from main process
+  useEffect(() => {
+    const handleSwitchToBrowser = (event: any, data: { browserId: string }) => {
+      if (data.browserId) {
+        focus(data.browserId);
+      }
+    };
+
+    window.app.listener.switchToBrowser(handleSwitchToBrowser);
+    return () => window.app.off.switchToBrowser();
+  }, [focus]);
+
   return (
     <ErrorFallback>
       <div

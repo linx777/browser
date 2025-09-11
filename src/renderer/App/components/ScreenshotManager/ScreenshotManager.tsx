@@ -37,13 +37,13 @@ const ScreenshotManager: React.FC = () => {
     };
 
     // Add event listeners
-    window.electron?.ipcRenderer?.on('screenshot-taken', handleScreenshotTaken);
-    window.electron?.ipcRenderer?.on('screenshot-error', handleScreenshotError);
+    window.app.listener.screenshotTaken(handleScreenshotTaken);
+    window.app.listener.screenshotError(handleScreenshotError);
 
     // Cleanup
     return () => {
-      window.electron?.ipcRenderer?.removeListener('screenshot-taken', handleScreenshotTaken);
-      window.electron?.ipcRenderer?.removeListener('screenshot-error', handleScreenshotError);
+      window.app.off.screenshotTaken();
+      window.app.off.screenshotError();
     };
   }, []);
 
@@ -159,6 +159,19 @@ const ScreenshotManager: React.FC = () => {
     return path.split('/').pop() || path.split('\\').pop() || path;
   };
 
+  const handleSingleClick = async (screenshotPath: string) => {
+    try {
+      await window.app.clipboard.copyImageToClipboard(screenshotPath);
+      // Show a brief success message
+      console.log('Screenshot copied to clipboard');
+      
+      // Start listening for ChatGPT input clicks with timeout
+      await window.app.browser.startChatGPTClickListening();
+    } catch (error) {
+      console.error('Error copying screenshot to clipboard:', error);
+    }
+  };
+
   return (
     <div className="screenshot-manager">
       <div className="screenshot-header">
@@ -219,7 +232,8 @@ const ScreenshotManager: React.FC = () => {
                   <img 
                     src={screenshot.preview} 
                     alt="Screenshot preview"
-                    onClick={() => window.electron?.shell?.openPath(screenshot.path)}
+                    onClick={() => handleSingleClick(screenshot.path)}
+                    title="Click to copy to clipboard"
                   />
                 ) : (
                   <div className="no-preview">No Preview</div>

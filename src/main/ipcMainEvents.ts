@@ -780,7 +780,7 @@ export const makeIpcMainEvents = (): void => {
       return { success: true, items };
     } catch (error) {
       console.error('[IPC] Error getting clipboard items:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
     }
   });
 
@@ -794,7 +794,7 @@ export const makeIpcMainEvents = (): void => {
       return { success: true };
     } catch (error) {
       console.error('[IPC] Error clearing clipboard items:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
     }
   });
 
@@ -808,7 +808,7 @@ export const makeIpcMainEvents = (): void => {
       return { success: true, item };
     } catch (error) {
       console.error('[IPC] Error adding clipboard item:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
     }
   });
 
@@ -822,7 +822,7 @@ export const makeIpcMainEvents = (): void => {
       return { success };
     } catch (error) {
       console.error('[IPC] Error removing clipboard item:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
     }
   });
 
@@ -836,7 +836,7 @@ export const makeIpcMainEvents = (): void => {
       return { success: true };
     } catch (error) {
       console.error('[IPC] Error starting clipboard monitoring:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
     }
   });
 
@@ -850,7 +850,7 @@ export const makeIpcMainEvents = (): void => {
       return { success: true };
     } catch (error) {
       console.error('[IPC] Error stopping clipboard monitoring:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
     }
   });
 
@@ -865,7 +865,7 @@ export const makeIpcMainEvents = (): void => {
       return { success: true, isMonitoring, stats };
     } catch (error) {
       console.error('[IPC] Error getting clipboard monitoring status:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
     }
   });
 
@@ -884,7 +884,7 @@ export const makeIpcMainEvents = (): void => {
       return { success: true, path: screenshotPath };
     } catch (error) {
       console.error('[IPC] Error taking screenshot:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
     }
   });
 
@@ -898,7 +898,7 @@ export const makeIpcMainEvents = (): void => {
       return { success: true, paths };
     } catch (error) {
       console.error('[IPC] Error getting screenshot paths:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
     }
   });
 
@@ -912,7 +912,7 @@ export const makeIpcMainEvents = (): void => {
       return { success: true, directory };
     } catch (error) {
       console.error('[IPC] Error getting screenshot directory:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
     }
   });
 
@@ -926,7 +926,7 @@ export const makeIpcMainEvents = (): void => {
       return { success: true, preview };
     } catch (error) {
       console.error('[IPC] Error getting image preview:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
     }
   });
 
@@ -940,7 +940,7 @@ export const makeIpcMainEvents = (): void => {
       return result;
     } catch (error) {
       console.error('[IPC] Error deleting screenshot:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
     }
   });
 
@@ -954,7 +954,7 @@ export const makeIpcMainEvents = (): void => {
       return { success: true };
     } catch (error) {
       console.error('[IPC] Error clearing screenshots:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
     }
   });
 
@@ -968,7 +968,109 @@ export const makeIpcMainEvents = (): void => {
       return { success: true, stats };
     } catch (error) {
       console.error('[IPC] Error getting screenshot stats:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  });
+
+  /**
+   * Simulates Cmd+V (paste) key combination
+   */
+  ipcMain.handle('simulate-paste', () => {
+    try {
+      const { simulatePasteWithGlobalShortcut } = require('./keyboardSimulation');
+      simulatePasteWithGlobalShortcut();
+      return { success: true };
+    } catch (error) {
+      console.error('[IPC] Error simulating paste:', error);
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  });
+
+  /**
+   * Switches to a specific browser by webContents ID
+   */
+  ipcMain.handle('switch-to-browser', (_event, webContentsId: number) => {
+    try {
+      // Find the browser ID that corresponds to this webContents ID
+      const browsers = getBrowsers();
+      let targetBrowserId = null;
+      
+      for (const [browserId, webContents] of Object.entries(browsers)) {
+        if (webContents.id === webContentsId) {
+          targetBrowserId = browserId;
+          break;
+        }
+      }
+      
+      if (targetBrowserId) {
+        // Send message to renderer to switch to this browser
+        const mainWindow = getMainWindow();
+        if (mainWindow) {
+          mainWindow.webContents.send('switch-to-browser', { browserId: targetBrowserId });
+        }
+        return { success: true, browserId: targetBrowserId };
+      } else {
+        return { success: false, error: 'Browser not found' };
+      }
+    } catch (error) {
+      console.error('[IPC] Error switching to browser:', error);
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  });
+
+  /**
+   * Starts listening for ChatGPT input clicks with timeout
+   */
+  ipcMain.handle('start-chatgpt-click-listening', () => {
+    try {
+      const { startChatGPTClickListening } = require('./appEvents');
+      const success = startChatGPTClickListening();
+      return { success };
+    } catch (error) {
+      console.error('[IPC] Error starting ChatGPT click listening:', error);
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  });
+
+  /**
+   * Stops listening for ChatGPT input clicks
+   */
+  ipcMain.handle('stop-chatgpt-click-listening', () => {
+    try {
+      const { stopChatGPTClickListening } = require('./appEvents');
+      const success = stopChatGPTClickListening();
+      return { success };
+    } catch (error) {
+      console.error('[IPC] Error stopping ChatGPT click listening:', error);
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  });
+
+
+  /**
+   * Copies an image file to the clipboard
+   */
+  ipcMain.handle('copy-image-to-clipboard', async (_event, imagePath: string) => {
+    try {
+      const { clipboard } = require('electron');
+      const fs = require('fs');
+      
+      // Read the image file
+      const imageBuffer = fs.readFileSync(imagePath);
+      
+      // Note: File extension could be used for future image type validation if needed
+      
+      // Create a native image from buffer
+      const { nativeImage } = require('electron');
+      const image = nativeImage.createFromBuffer(imageBuffer);
+      
+      // Copy to clipboard
+      clipboard.writeImage(image);
+      
+      return { success: true };
+    } catch (error) {
+      console.error('[IPC] Error copying image to clipboard:', error);
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
     }
   });
 };

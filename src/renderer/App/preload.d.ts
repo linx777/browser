@@ -47,13 +47,16 @@ declare global {
         getAllBookmarks: () => Promise<Bookmark[]>;
         findInBookmarks: (str: string) => Promise<any>;
       };
-      browser: {
-        select: (webContentsId: number) => void;
-        selectBrowserView: () => void;
-        certificateErrorAnswer: (args: IpcCertificateErrorAnswer) => void;
-        requestCapture: (webContentsId: number) => Promise<string>;
-        getUrlToOpen: () => Promise<string | undefined>;
-      };
+    browser: {
+      select: (webContentsId: number) => void;
+      selectBrowserView: () => void;
+      certificateErrorAnswer: (args: IpcCertificateErrorAnswer) => void;
+      requestCapture: (webContentsId: number) => Promise<string>;
+      getUrlToOpen: () => Promise<string | undefined>;
+      switchToBrowser: (webContentsId: number) => Promise<{success: boolean, browserId?: string, error?: string}>;
+      startChatGPTClickListening: () => Promise<{success: boolean, error?: string}>;
+      stopChatGPTClickListening: () => Promise<{success: boolean, error?: string}>;
+    };
       config: {
         getAll: () => Promise<Record<string, any>>;
         get: (key: string) => Promise<unknown>;
@@ -181,6 +184,7 @@ declare global {
         startMonitoring: () => Promise<{success: boolean, error?: string}>;
         stopMonitoring: () => Promise<{success: boolean, error?: string}>;
       getMonitoringStatus: () => Promise<{success: boolean, isMonitoring?: boolean, stats?: {totalItems: number, oldestItem?: number, newestItem?: number}, error?: string}>;
+      copyImageToClipboard: (imagePath: string) => Promise<{success: boolean, error?: string}>;
     };
     screenshot: {
       takeScreenshot: () => Promise<{success: boolean, path?: string, error?: string}>;
@@ -190,6 +194,9 @@ declare global {
       deleteScreenshot: (filepath: string) => Promise<{success: boolean, error?: string}>;
       clearScreenshots: () => Promise<{success: boolean, error?: string}>;
       getStats: () => Promise<{success: boolean, stats?: {totalScreenshots: number, directory: string}, error?: string}>;
+    };
+    keyboard: {
+      simulatePaste: () => Promise<{success: boolean, error?: string}>;
     };
     };
   }

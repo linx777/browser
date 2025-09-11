@@ -111,6 +111,15 @@ contextBridge.exposeInMainWorld('app', {
     getUrlToOpen: (): Promise<string | undefined> => {
       return ipcRenderer.invoke('get-url-to-open');
     },
+    switchToBrowser: (webContentsId: number): Promise<{success: boolean, browserId?: string, error?: string}> => {
+      return ipcRenderer.invoke('switch-to-browser', webContentsId);
+    },
+    startChatGPTClickListening: (): Promise<{success: boolean, error?: string}> => {
+      return ipcRenderer.invoke('start-chatgpt-click-listening');
+    },
+    stopChatGPTClickListening: (): Promise<{success: boolean, error?: string}> => {
+      return ipcRenderer.invoke('stop-chatgpt-click-listening');
+    },
   },
   config: {
     getAll: () => ipcRenderer.invoke('get-all-store-values'),
@@ -296,6 +305,27 @@ contextBridge.exposeInMainWorld('app', {
         action(event, horizontal, vertical)
       );
     },
+    screenshotTaken: (
+      action: (event: IpcRendererEvent, data: { path: string }) => void
+    ) => {
+      ipcRenderer.on('screenshot-taken', (event, data) =>
+        action(event, data as { path: string })
+      );
+    },
+    screenshotError: (
+      action: (event: IpcRendererEvent, data: { error: string }) => void
+    ) => {
+      ipcRenderer.on('screenshot-error', (event, data) =>
+        action(event, data as { error: string })
+      );
+    },
+    switchToBrowser: (
+      action: (event: IpcRendererEvent, data: { browserId: string }) => void
+    ) => {
+      ipcRenderer.on('switch-to-browser', (event, data) =>
+        action(event, data as { browserId: string })
+      );
+    },
   },
   off: {
     newWindow: () => {
@@ -352,6 +382,15 @@ contextBridge.exposeInMainWorld('app', {
     autotileWindows: () => {
       ipcRenderer.removeAllListeners('autotile-windows');
     },
+    screenshotTaken: () => {
+      ipcRenderer.removeAllListeners('screenshot-taken');
+    },
+    screenshotError: () => {
+      ipcRenderer.removeAllListeners('screenshot-error');
+    },
+    switchToBrowser: () => {
+      ipcRenderer.removeAllListeners('switch-to-browser');
+    },
   },
   tools: {
     inspectElement: (point: IpcInspectElement) => {
@@ -377,6 +416,9 @@ contextBridge.exposeInMainWorld('app', {
     },
     findInKnownDomains: (input: string): Promise<DomainSuggestion[]> => {
       return ipcRenderer.invoke('find-in-known-domains', input);
+    },
+    copyFilenameToChatGPT: (filename: string) => {
+      ipcRenderer.send('copy-filename-to-chatgpt', filename);
     },
   },
   clipboard: {
@@ -407,6 +449,9 @@ contextBridge.exposeInMainWorld('app', {
           getMonitoringStatus: (): Promise<{success: boolean, isMonitoring?: boolean, stats?: {totalItems: number, oldestItem?: number, newestItem?: number}, error?: string}> => {
             return ipcRenderer.invoke('get-clipboard-monitoring-status');
           },
+          copyImageToClipboard: (imagePath: string): Promise<{success: boolean, error?: string}> => {
+            return ipcRenderer.invoke('copy-image-to-clipboard', imagePath);
+          },
         },
         screenshot: {
           takeScreenshot: (): Promise<{success: boolean, path?: string, error?: string}> => {
@@ -429,6 +474,11 @@ contextBridge.exposeInMainWorld('app', {
           },
           getStats: (): Promise<{success: boolean, stats?: {totalScreenshots: number, directory: string}, error?: string}> => {
             return ipcRenderer.invoke('get-screenshot-stats');
+          },
+        },
+        keyboard: {
+          simulatePaste: (): Promise<{success: boolean, error?: string}> => {
+            return ipcRenderer.invoke('simulate-paste');
           },
         },
   os: {
