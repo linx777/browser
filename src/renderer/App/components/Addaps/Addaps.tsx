@@ -250,7 +250,7 @@ export const Addaps = ({ boardId }: AddapsProps) => {
           <div
             id="Addaps__background"
             style={{
-              background: `linear-gradient(200.96deg, ${settings['application.backgroundGradientColors.0']} -29.09%, ${settings['application.backgroundGradientColors.1']} 51.77%, ${settings['application.backgroundGradientColors.2']} 129.35%)`,
+              background: 'transparent',
             }}
           />
           <LeftBar />

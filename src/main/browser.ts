@@ -112,6 +112,7 @@ export const createWindow = async (): Promise<BrowserWindow> => {
     icon: getAssetPath('icon.png'),
     titleBarStyle: 'hidden',
     titleBarOverlay: false,
+    transparent: true,
     webPreferences: {
       partition: 'persist:user-partition',
       sandbox: true,

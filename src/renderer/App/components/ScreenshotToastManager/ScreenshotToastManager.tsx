@@ -82,29 +82,14 @@ const ScreenshotToastManager: React.FC = () => {
     }
   }, []);
 
-  const handleOpenScreenshot = useCallback((path: string) => {
-    try {
-      // Use the proper API to open file
-      window.app.tools.showItemInFolder(path);
-    } catch (error) {
-      console.error('Error opening screenshot:', error);
-    }
-  }, []);
-
-
-  const handleCopyFilenameToChatGPT = useCallback((filename: string) => {
-    if (window.app) {
-      window.app.tools.copyFilenameToChatGPT?.(filename);
-    }
-  }, []);
 
   return (
     <div className="screenshot-toast-manager">
       {toasts.map((toast, index) => {
         // Calculate proper vertical positioning to prevent overlapping
-        // Each toast is approximately 230px tall (header ~40px + content ~148px + actions ~40px), with 30px spacing
-        const toastHeight = 230;
-        const spacing = 30;
+        // Each toast is approximately 80px tall (content ~60px + minimal padding), with minimal spacing
+        const toastHeight = 80;
+        const spacing = 1;
         const topPosition = 20 + (index * (toastHeight + spacing));
         
         return (
@@ -120,8 +105,6 @@ const ScreenshotToastManager: React.FC = () => {
               screenshot={toast}
               onClose={() => removeToast(toast.id)}
               onDelete={handleDeleteScreenshot}
-              onOpen={handleOpenScreenshot}
-              onCopyFilenameToChatGPT={handleCopyFilenameToChatGPT}
             />
           </div>
         );

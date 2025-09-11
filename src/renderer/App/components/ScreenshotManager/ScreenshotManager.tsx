@@ -244,12 +244,6 @@ const ScreenshotManager: React.FC = () => {
                 <p className="timestamp">{formatTimestamp(screenshot.timestamp)}</p>
                 <div className="screenshot-actions">
                   <button 
-                    onClick={() => window.electron?.shell?.openPath(screenshot.path)}
-                    className="open-btn"
-                  >
-                    Open
-                  </button>
-                  <button 
                     onClick={() => deleteScreenshot(screenshot.path)}
                     className="delete-btn"
                   >

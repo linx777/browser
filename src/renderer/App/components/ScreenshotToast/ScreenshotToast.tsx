@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, ExternalLink } from 'lucide-react';
+import { X } from 'lucide-react';
 import './ScreenshotToast.scss';
 
 interface ScreenshotToastProps {
@@ -9,14 +9,12 @@ interface ScreenshotToastProps {
   };
   onClose: () => void;
   onDelete?: (path: string) => void;
-  onOpen?: (path: string) => void;
 }
 
 const ScreenshotToast: React.FC<ScreenshotToastProps> = ({
   screenshot,
   onClose,
-  onDelete,
-  onOpen
+  onDelete
 }) => {
   const [preview, setPreview] = useState<string>('');
   const [loading, setLoading] = useState(true);
@@ -54,11 +52,6 @@ const ScreenshotToast: React.FC<ScreenshotToastProps> = ({
     }
   };
 
-  const handleOpen = () => {
-    if (onOpen) {
-      onOpen(screenshot.path);
-    }
-  };
 
 
   const handleSingleClick = async () => {
@@ -116,19 +109,6 @@ const ScreenshotToast: React.FC<ScreenshotToastProps> = ({
         </div>
       </div>
 
-      <div className="screenshot-toast-actions">
-        {onOpen && (
-          <button 
-            className="screenshot-action-btn open-btn"
-            onClick={handleOpen}
-            disabled={isDeleting}
-            title="Open screenshot"
-          >
-            <ExternalLink size={14} />
-            <span>Open</span>
-          </button>
-        )}
-      </div>
     </div>
   );
 };

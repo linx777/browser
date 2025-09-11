@@ -12,7 +12,7 @@
     right: 20px;
     pointer-events: auto; // Re-enable pointer events for the toast itself
     animation: slideInRight 0.3s ease-out;
-    margin-bottom: 30px; // Add spacing between toasts
+    margin-bottom: 0; // No spacing between toasts
   }
 }
 
@@ -44,7 +44,7 @@
   .screenshot-toast-manager {
     .screenshot-toast-wrapper {
       // Reduce spacing on smaller screens
-      margin-bottom: 10px;
+      margin-bottom: 1px;
     }
   }
 }
