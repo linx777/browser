@@ -26,7 +26,7 @@ export class ScreenshotHelper {
     // Store screenshots in project directory
     this.screenshotDir = path.join(__dirname, '..', '..', 'screenshots');
     this.ensureDirectoriesExist();
-    this.clearScreenshots(); // Clear all screenshots on app start
+    this.clearAllScreenshots(); // Clear all screenshots on app start
   }
 
   public static getInstance(): ScreenshotHelper {
@@ -205,6 +205,28 @@ export class ScreenshotHelper {
       }
     });
     this.screenshotQueue = [];
+  }
+
+  /**
+   * Clears all files in the screenshots directory
+   */
+  public clearAllScreenshots(): void {
+    try {
+      if (fs.existsSync(this.screenshotDir)) {
+        const files = fs.readdirSync(this.screenshotDir);
+        files.forEach((file) => {
+          const filePath = path.join(this.screenshotDir, file);
+          try {
+            fs.unlinkSync(filePath);
+          } catch (error) {
+            console.error(`[ScreenshotHelper] Error deleting file ${filePath}:`, error);
+          }
+        });
+      }
+      this.screenshotQueue = [];
+    } catch (error) {
+      console.error('[ScreenshotHelper] Error clearing all screenshots:', error);
+    }
   }
 
   /**

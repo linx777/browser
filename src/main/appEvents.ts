@@ -11,6 +11,8 @@ import path from 'path';
 import { Electron } from 'namespaces/_electronist';
 import { makeAssociation } from './association';
 import { globalShortcutsHelper } from './globalShortcuts';
+import { screenshotHelper } from './screenshotHelper'; // Initialize screenshotHelper to clear screenshots on startup
+void screenshotHelper; // Ensure screenshotHelper is initialized
 import {
   createWindow,
   getMainWindow,
