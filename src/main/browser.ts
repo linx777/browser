@@ -124,31 +124,31 @@ export const createWindow = async (): Promise<BrowserWindow> => {
 
   mainWindow.setMenu(null);
 
-  // // Enhanced screen capture resistance
-  // mainWindow.setContentProtection(true);
+  // Enhanced screen capture resistance
+  mainWindow.setContentProtection(true);
 
-  // mainWindow.setVisibleOnAllWorkspaces(true, {
-  //   visibleOnFullScreen: true
-  // });
-  // mainWindow.setAlwaysOnTop(true, "screen-saver", 1);
+  mainWindow.setVisibleOnAllWorkspaces(true, {
+    visibleOnFullScreen: true
+  });
+  mainWindow.setAlwaysOnTop(true, "screen-saver", 1);
 
-  // // Additional screen capture resistance settings
-  // if (process.platform === "darwin") {
-  //   // Prevent window from being captured in screenshots
-  //   mainWindow.setHiddenInMissionControl(true);
-  //   mainWindow.setWindowButtonVisibility(false);
-  //   mainWindow.setBackgroundColor("#00000000");
+  // Additional screen capture resistance settings
+  if (process.platform === "darwin") {
+    // Prevent window from being captured in screenshots
+    mainWindow.setHiddenInMissionControl(true);
+    mainWindow.setWindowButtonVisibility(false);
+    mainWindow.setBackgroundColor("#00000000");
 
-  //   // Prevent window from being included in window switcher
-  //   mainWindow.setSkipTaskbar(true);
+    // Prevent window from being included in window switcher
+    mainWindow.setSkipTaskbar(true);
 
-  //   // Disable window shadow
-  //   mainWindow.setHasShadow(false);
-  // }
+    // Disable window shadow
+    mainWindow.setHasShadow(false);
+  }
 
-  // // Prevent the window from being captured by screen recording
-  // mainWindow.webContents.setBackgroundThrottling(false);
-  // mainWindow.webContents.setFrameRate(60);
+  // Prevent the window from being captured by screen recording
+  mainWindow.webContents.setBackgroundThrottling(false);
+  mainWindow.webContents.setFrameRate(60);
 
   await mainWindow.loadURL(resolveHtmlPath('titleBar.html'));
 
