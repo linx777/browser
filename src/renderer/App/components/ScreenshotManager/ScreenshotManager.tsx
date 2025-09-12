@@ -162,8 +162,6 @@ const ScreenshotManager: React.FC = () => {
   const handleSingleClick = async (screenshotPath: string) => {
     try {
       await window.app.clipboard.copyImageToClipboard(screenshotPath);
-      // Show a brief success message
-      console.log('Screenshot copied to clipboard');
       
       // Start listening for ChatGPT input clicks with timeout
       await window.app.browser.startChatGPTClickListening();

@@ -49,13 +49,11 @@ export const startChatGPTClickListening = () => {
     
     // Set flag to indicate we're listening
     isListeningForChatGPTClick = true;
-    console.log('Started listening for ChatGPT input clicks');
     
     // Set timeout
     chatgptClickTimeout = setTimeout(() => {
       isListeningForChatGPTClick = false;
       chatgptClickTimeout = null;
-      console.log('Stopped listening for ChatGPT input clicks (timeout)');
     }, 3500);
     
     return true;
@@ -206,9 +204,7 @@ const setupChatGPTInputClickDetection = (webContents: any) => {
       
       // Add click listener to document
       document.addEventListener('click', (event) => {
-        console.log('Click detected on element:', event.target);
         if (isAIServiceInput(event.target)) {
-          console.log('AI service input clicked, sending paste message');
           // Send message to main process to trigger paste
           console.log(JSON.stringify({
             type: 'CHATGPT_INPUT_CLICKED',
@@ -370,8 +366,6 @@ const switchToChatGPTAndPaste = (content: string) => {
           // Silently handle errors to avoid console spam
         });
       }, 500); // Wait longer for AppleScript focus to take effect
-    } else {
-      console.log('No AI service (ChatGPT or Gemini) found - cannot paste content');
     }
   } catch (error) {
     // Silently handle errors
@@ -416,6 +410,9 @@ const makeAppEvents = () => {
 
   if (!gotTheLock) app.quit();
 
+  // Set dark mode as default theme
+  const { nativeTheme } = require('electron');
+  nativeTheme.themeSource = 'dark';
 
   // Listen for copy filename to ChatGPT
   ipcMain.on('copy-filename-to-chatgpt', (_event, filename: string) => {
@@ -526,16 +523,12 @@ const makeAppEvents = () => {
             // Switch focus to ChatGPT and paste content
             switchToChatGPTAndPaste(data.content);
           } else if (data.type === 'CHATGPT_INPUT_CLICKED' && data.action === 'simulate_paste') {
-            console.log('Received ChatGPT input click message, listening state:', isListeningForChatGPTClick);
             // Only simulate paste if we're currently listening
             if (isListeningForChatGPTClick) {
-              console.log('Simulating paste on ChatGPT input');
               // Use the webContents that sent the message directly
               webContents.paste();
               // Stop listening after successful paste
               stopChatGPTClickListening();
-            } else {
-              console.log('Not listening for ChatGPT clicks, ignoring paste request');
             }
           }
         } catch (error) {
@@ -957,9 +950,8 @@ const makeAppEvents = () => {
             });
             
           })();
-        `).catch(err => {
+        `).catch(() => {
           // Ignore errors for pages that don't allow script execution
-          console.log('Could not inject auto-copy script:', err.message);
         });
       });
 

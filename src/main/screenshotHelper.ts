@@ -53,7 +53,6 @@ export class ScreenshotHelper {
    */
   private getWindowScreenIndex(window?: BrowserWindow): number {
     if (!window) {
-      console.log('[ScreenshotHelper] No window provided, using primary screen (0)');
       return 0;
     }
 
@@ -71,13 +70,11 @@ export class ScreenshotHelper {
         // Check if window center is within this display's bounds
         if (windowCenterX >= x && windowCenterX < x + width &&
             windowCenterY >= y && windowCenterY < y + height) {
-          console.log(`[ScreenshotHelper] Window is on screen ${i} (${display.label || 'Unknown'})`);
           return i;
         }
       }
       
       // Fallback to primary screen if window position doesn't match any display
-      console.log('[ScreenshotHelper] Window position not found on any display, using primary screen (0)');
       return 0;
     } catch (error) {
       console.error('[ScreenshotHelper] Error detecting window screen:', error);

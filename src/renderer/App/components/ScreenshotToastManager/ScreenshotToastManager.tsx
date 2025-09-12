@@ -112,14 +112,14 @@ const ScreenshotToastManager: React.FC = () => {
         // Each toast is approximately 80px tall (content ~60px + minimal padding), with minimal spacing
         const toastHeight = 80;
         const spacing = 1;
-        const topPosition = 20 + (index * (toastHeight + spacing));
+        const bottomPosition = 20 + (index * (toastHeight + spacing));
         
         return (
           <div
             key={toast.id}
             className="screenshot-toast-wrapper"
             style={{
-              top: `${topPosition}px`,
+              bottom: `${bottomPosition}px`,
               zIndex: 10000 - index // Higher z-index for newer toasts
             }}
           >

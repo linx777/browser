@@ -164,6 +164,9 @@ const bonbonAutoLauncher = new AutoLaunch({
 export const makeIpcMainEvents = (): void => {
   const extensions = getExtensionsObject();
 
+  // Set dark mode as default
+  nativeTheme.themeSource = 'dark';
+
   // Theme-related handlers
   /**
    * Toggles dark mode.

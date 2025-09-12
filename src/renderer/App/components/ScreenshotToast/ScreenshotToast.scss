@@ -7,11 +7,11 @@
   border-radius: 0;
   box-shadow: none;
   z-index: 10000;
-  animation: slideInRight 0.3s ease-out;
+  animation: slideInLeft 0.3s ease-out;
   overflow: hidden;
 
   &.exiting {
-    animation: slideOutRight 0.3s ease-in forwards;
+    animation: slideOutLeft 0.3s ease-in forwards;
     
     .screenshot-preview {
       background: rgba(0, 0, 0, 0.8) !important;
@@ -256,6 +256,17 @@
   to {
     transform: translateX(0);
     opacity: 1;
+  }
+}
+
+@keyframes slideOutLeft {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(-100%);
+    opacity: 0;
   }
 }
 

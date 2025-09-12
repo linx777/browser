@@ -96,8 +96,6 @@ const ScreenshotToast: React.FC<ScreenshotToastProps> = ({
       const result = await window.app.clipboard.copyImageToClipboard(screenshot.path);
       
       if (result.success) {
-        console.log('Screenshot copied to clipboard');
-        
         // Step 4: Auto-paste the screenshot
         setTimeout(async () => {
           try {

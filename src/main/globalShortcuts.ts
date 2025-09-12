@@ -47,45 +47,37 @@ export class GlobalShortcutsHelper {
   registerGlobalShortcuts(): void {
     // Window movement shortcuts
     globalShortcut.register('CommandOrControl+Left', () => {
-      console.log('Command/Ctrl + Left pressed. Moving window left.');
       this.moveWindowLeft();
     });
 
     globalShortcut.register('CommandOrControl+Right', () => {
-      console.log('Command/Ctrl + Right pressed. Moving window right.');
       this.moveWindowRight();
     });
 
     globalShortcut.register('CommandOrControl+Up', () => {
-      console.log('Command/Ctrl + Up pressed. Moving window up.');
       this.moveWindowUp();
     });
 
     globalShortcut.register('CommandOrControl+Down', () => {
-      console.log('Command/Ctrl + Down pressed. Moving window down.');
       this.moveWindowDown();
     });
 
     // Window visibility toggle
     globalShortcut.register('CommandOrControl+B', () => {
-      console.log('Command/Ctrl + B pressed. Toggling window visibility.');
       this.toggleWindowVisibility();
     });
 
     // Opacity adjustment shortcuts
     globalShortcut.register('CommandOrControl+[', () => {
-      console.log('Command/Ctrl + [ pressed. Decreasing opacity.');
       this.adjustOpacity(-0.1);
     });
 
     globalShortcut.register('CommandOrControl+]', () => {
-      console.log('Command/Ctrl + ] pressed. Increasing opacity.');
       this.adjustOpacity(0.1);
     });
 
     // Click-through toggle shortcut
     globalShortcut.register('CommandOrControl+T', () => {
-      console.log('Command/Ctrl + T pressed. Disabling click-through mode.');
       this.disableClickThrough();
     });
 
@@ -101,7 +93,6 @@ export class GlobalShortcutsHelper {
 
     // Focus ChatGPT input shortcut
     globalShortcut.register('CommandOrControl+W', () => {
-      console.log('Command/Ctrl + W pressed. Focusing ChatGPT input.');
       this.focusChatGPTInput();
     });
 
@@ -287,7 +278,6 @@ export class GlobalShortcutsHelper {
   private async takeScreenshot(): Promise<void> {
     try {
       // First focus the AI service input area before taking screenshot
-      console.log('Focusing AI service input before taking screenshot');
       this.focusChatGPTInput();
       
       // Wait a moment for focus to take effect
@@ -352,17 +342,13 @@ export class GlobalShortcutsHelper {
    */
   private async clearAllData(): Promise<void> {
     try {
-      console.log('Command/Ctrl + R pressed. Clearing all data...');
-      
       // Clear all screenshots
       const { screenshotHelper } = require('./screenshotHelper');
       screenshotHelper.clearAllScreenshots();
-      console.log('Cleared all screenshots');
       
       // Clear clipboard items
       const { clipboardManager } = require('./clipboardManager');
       clipboardManager.clearClipboardItems();
-      console.log('Cleared clipboard items');
       
       // Clear clipboard JSON file
       const fs = require('fs');
@@ -370,22 +356,19 @@ export class GlobalShortcutsHelper {
       const clipboardFilePath = path.join(__dirname, '..', '..', 'clipboard-items.json');
       if (fs.existsSync(clipboardFilePath)) {
         fs.writeFileSync(clipboardFilePath, '[]');
-        console.log('Cleared clipboard JSON file');
       }
       
       // Send message to renderer to clear toasts
       if (this.mainWindow) {
         this.mainWindow.webContents.send('clear-all-toasts');
-        console.log('Sent clear toasts message to renderer');
         
         // Also clear copy toasts by executing JavaScript in all webviews
         this.mainWindow.webContents.executeJavaScript(`
           // Clear all copy toasts (bonbon-notification elements)
           const copyToasts = document.querySelectorAll('.bonbon-notification');
           copyToasts.forEach(toast => toast.remove());
-          console.log('Cleared all copy toasts in main window');
-        `).catch(err => {
-          console.log('Could not clear copy toasts in main window:', err.message);
+        `).catch(() => {
+          // Silently handle errors
         });
       }
       
@@ -398,14 +381,11 @@ export class GlobalShortcutsHelper {
             // Clear all copy toasts (bonbon-notification elements)
             const copyToasts = document.querySelectorAll('.bonbon-notification');
             copyToasts.forEach(toast => toast.remove());
-            console.log('Cleared all copy toasts in browser webview');
-          `).catch((err: any) => {
-            console.log('Could not clear copy toasts in browser webview:', err.message);
+          `).catch(() => {
+            // Silently handle errors
           });
         }
       });
-      
-      console.log('All data cleared successfully');
     } catch (error) {
       console.error('Error clearing all data:', error);
     }
