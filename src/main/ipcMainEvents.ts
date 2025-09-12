@@ -922,8 +922,8 @@ export const makeIpcMainEvents = (): void => {
   ipcMain.handle('get-image-preview', async (_event, filepath: string) => {
     try {
       const { screenshotHelper } = require('./screenshotHelper');
-      const preview = await screenshotHelper.getImagePreview(filepath);
-      return { success: true, preview };
+      const result = await screenshotHelper.getImagePreview(filepath);
+      return result;
     } catch (error) {
       console.error('[IPC] Error getting image preview:', error);
       return { success: false, error: error instanceof Error ? error.message : String(error) };
@@ -1046,6 +1046,20 @@ export const makeIpcMainEvents = (): void => {
     }
   });
 
+  /**
+   * Focuses ChatGPT input area
+   */
+  ipcMain.handle('focus-chatgpt-input', () => {
+    try {
+      const { focusChatGPTInput } = require('./appEvents');
+      focusChatGPTInput();
+      return { success: true };
+    } catch (error) {
+      console.error('[IPC] Error focusing ChatGPT input:', error);
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+  });
+
 
   /**
    * Copies an image file to the clipboard
@@ -1054,15 +1068,41 @@ export const makeIpcMainEvents = (): void => {
     try {
       const { clipboard } = require('electron');
       const fs = require('fs');
+      const path = require('path');
+      
+      // Check if file exists before trying to read it
+      if (!fs.existsSync(imagePath)) {
+        console.warn(`[IPC] Image file does not exist: ${imagePath}`);
+        return { success: false, error: 'Image file does not exist' };
+      }
+      
+      // Check if it's actually a file (not a directory)
+      const stats = fs.statSync(imagePath);
+      if (!stats.isFile()) {
+        console.warn(`[IPC] Path is not a file: ${imagePath}`);
+        return { success: false, error: 'Path is not a file' };
+      }
       
       // Read the image file
       const imageBuffer = fs.readFileSync(imagePath);
+      
+      // Check if file is not empty
+      if (imageBuffer.length === 0) {
+        console.warn(`[IPC] Image file is empty: ${imagePath}`);
+        return { success: false, error: 'Image file is empty' };
+      }
       
       // Note: File extension could be used for future image type validation if needed
       
       // Create a native image from buffer
       const { nativeImage } = require('electron');
       const image = nativeImage.createFromBuffer(imageBuffer);
+      
+      // Check if image is valid
+      if (image.isEmpty()) {
+        console.warn(`[IPC] Invalid image data: ${imagePath}`);
+        return { success: false, error: 'Invalid image data' };
+      }
       
       // Copy to clipboard
       clipboard.writeImage(image);

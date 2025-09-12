@@ -227,7 +227,8 @@ export const useGlobalEvents = () => {
 
   const matchMediaListener = useCallback(
     (e: { matches: boolean }) => {
-      const colorScheme = e.matches ? 'dark-theme' : 'light-theme';
+      // Always use dark theme regardless of system preference
+      const colorScheme = 'dark-theme';
       if (window.document.querySelector('body')?.className !== colorScheme) {
         //@ts-ignore
         window.document.querySelector('body').className = colorScheme;
@@ -396,13 +397,11 @@ export const useGlobalEvents = () => {
   }, [scrollListener]);
 
   useEffect(() => {
+    // Set dark theme as default
     //@ts-ignore
-    window.document.querySelector('body').className = window.matchMedia(
-      '(prefers-color-scheme: dark)'
-    ).matches
-      ? 'dark-theme'
-      : 'light-theme';
+    window.document.querySelector('body').className = 'dark-theme';
 
+    // Keep the listener for system theme changes but always apply dark theme
     window
       .matchMedia('(prefers-color-scheme: dark)')
       .addEventListener('change', matchMediaListener);

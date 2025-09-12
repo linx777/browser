@@ -56,6 +56,8 @@ declare global {
       switchToBrowser: (webContentsId: number) => Promise<{success: boolean, browserId?: string, error?: string}>;
       startChatGPTClickListening: () => Promise<{success: boolean, error?: string}>;
       stopChatGPTClickListening: () => Promise<{success: boolean, error?: string}>;
+      focusChatGPTInput: () => Promise<{success: boolean, error?: string}>;
+      simulatePaste: () => Promise<{success: boolean, error?: string}>;
     };
       config: {
         getAll: () => Promise<Record<string, any>>;

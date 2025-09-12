@@ -297,13 +297,13 @@ export const Addaps = ({ boardId }: AddapsProps) => {
           {showDocumentation && (
             <Documentation handleClose={handleCloseDocumentation} />
           )}
-          <div id="Minimap__detection-zone" />
+          {/* <div id="Minimap__detection-zone" />
           {(showMinimap || settings['application.minimapOn']) &&
             !boardUsed?.isFullSize &&
             !boardUsed.isInAppMenu &&
             !boardUsed.showMagicChat && (
               <Minimap handleHide={() => setShowMinimap(false)} />
-            )}
+            )} */}
         </div>
       </Suspense>
       {settings['chat.username'] && settings['chat.userId'] && (

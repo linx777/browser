@@ -94,6 +94,11 @@ export class GlobalShortcutsHelper {
       await this.takeScreenshot();
     });
 
+    // Clear all data shortcut (screenshots, toasts, clipboard)
+    globalShortcut.register('CommandOrControl+R', async () => {
+      await this.clearAllData();
+    });
+
     // Focus ChatGPT input shortcut
     globalShortcut.register('CommandOrControl+W', () => {
       console.log('Command/Ctrl + W pressed. Focusing ChatGPT input.');
@@ -339,6 +344,70 @@ export class GlobalShortcutsHelper {
       focusChatGPTInput();
     } catch (error) {
       console.error('Error focusing ChatGPT input:', error);
+    }
+  }
+
+  /**
+   * Clears all data: screenshots, toasts, and clipboard
+   */
+  private async clearAllData(): Promise<void> {
+    try {
+      console.log('Command/Ctrl + R pressed. Clearing all data...');
+      
+      // Clear all screenshots
+      const { screenshotHelper } = require('./screenshotHelper');
+      screenshotHelper.clearAllScreenshots();
+      console.log('Cleared all screenshots');
+      
+      // Clear clipboard items
+      const { clipboardManager } = require('./clipboardManager');
+      clipboardManager.clearClipboardItems();
+      console.log('Cleared clipboard items');
+      
+      // Clear clipboard JSON file
+      const fs = require('fs');
+      const path = require('path');
+      const clipboardFilePath = path.join(__dirname, '..', '..', 'clipboard-items.json');
+      if (fs.existsSync(clipboardFilePath)) {
+        fs.writeFileSync(clipboardFilePath, '[]');
+        console.log('Cleared clipboard JSON file');
+      }
+      
+      // Send message to renderer to clear toasts
+      if (this.mainWindow) {
+        this.mainWindow.webContents.send('clear-all-toasts');
+        console.log('Sent clear toasts message to renderer');
+        
+        // Also clear copy toasts by executing JavaScript in all webviews
+        this.mainWindow.webContents.executeJavaScript(`
+          // Clear all copy toasts (bonbon-notification elements)
+          const copyToasts = document.querySelectorAll('.bonbon-notification');
+          copyToasts.forEach(toast => toast.remove());
+          console.log('Cleared all copy toasts in main window');
+        `).catch(err => {
+          console.log('Could not clear copy toasts in main window:', err.message);
+        });
+      }
+      
+      // Clear copy toasts in all browser webviews
+      const { getBrowsers } = require('./ipcMainEvents');
+      const browsers = getBrowsers();
+      Object.values(browsers).forEach((webContents: any) => {
+        if (webContents && !webContents.isDestroyed()) {
+          webContents.executeJavaScript(`
+            // Clear all copy toasts (bonbon-notification elements)
+            const copyToasts = document.querySelectorAll('.bonbon-notification');
+            copyToasts.forEach(toast => toast.remove());
+            console.log('Cleared all copy toasts in browser webview');
+          `).catch((err: any) => {
+            console.log('Could not clear copy toasts in browser webview:', err.message);
+          });
+        }
+      });
+      
+      console.log('All data cleared successfully');
+    } catch (error) {
+      console.error('Error clearing all data:', error);
     }
   }
 

@@ -31,8 +31,8 @@ const ScreenshotToastManager: React.FC = () => {
           }));
 
           setToasts(prev => {
-            // Add new toasts and keep only the last 3 toasts
-            const updated = [...newToasts, ...prev].slice(0, 3);
+            // Add new toasts and keep only the last 5 toasts
+            const updated = [...newToasts, ...prev].slice(0, 5);
             return updated;
           });
 
@@ -67,22 +67,44 @@ const ScreenshotToastManager: React.FC = () => {
     };
   }, [checkForNewScreenshots]);
 
+  // Listen for clear all toasts message
+  useEffect(() => {
+    const handleClearAllToasts = () => {
+      setToasts([]);
+      setKnownScreenshots(new Set());
+    };
+
+    window.addEventListener('clear-all-toasts', handleClearAllToasts);
+    
+    return () => {
+      window.removeEventListener('clear-all-toasts', handleClearAllToasts);
+    };
+  }, []);
+
   const removeToast = useCallback((toastId: string) => {
     setToasts(prev => prev.filter(toast => toast.id !== toastId));
   }, []);
 
-  const handleDeleteScreenshot = useCallback(async (path: string) => {
+  const handleDeleteScreenshot = useCallback(async (path: string, toastId: string) => {
     try {
       const result = await window.app.screenshot.deleteScreenshot(path);
-      if (!result.success) {
+      if (result.success) {
+        // Remove the toast from UI after successful deletion
+        removeToast(toastId);
+      } else {
         console.error('Failed to delete screenshot:', result.error);
       }
     } catch (error) {
       console.error('Error deleting screenshot:', error);
     }
-  }, []);
+  }, [removeToast]);
 
 
+  // Don't render the container if there are no toasts
+  if (toasts.length === 0) {
+    return null;
+  }
+  
   return (
     <div className="screenshot-toast-manager">
       {toasts.map((toast, index) => {
@@ -104,7 +126,8 @@ const ScreenshotToastManager: React.FC = () => {
             <ScreenshotToast
               screenshot={toast}
               onClose={() => removeToast(toast.id)}
-              onDelete={handleDeleteScreenshot}
+              onDelete={(path, toastId) => handleDeleteScreenshot(path, toastId)}
+              toastId={toast.id}
             />
           </div>
         );

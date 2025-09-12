@@ -3,8 +3,7 @@
 
 import path from 'path';
 import fs from 'fs';
-import { app, BrowserWindow } from 'electron';
-import { v4 as uuidv4 } from 'uuid';
+import { BrowserWindow, screen } from 'electron';
 import screenshot from 'screenshot-desktop';
 
 export interface ScreenshotOptions {
@@ -49,16 +48,56 @@ export class ScreenshotHelper {
     }
   }
 
+  /**
+   * Detects which screen the window is currently on
+   */
+  private getWindowScreenIndex(window?: BrowserWindow): number {
+    if (!window) {
+      console.log('[ScreenshotHelper] No window provided, using primary screen (0)');
+      return 0;
+    }
+
+    try {
+      const windowBounds = window.getBounds();
+      const windowCenterX = windowBounds.x + windowBounds.width / 2;
+      const windowCenterY = windowBounds.y + windowBounds.height / 2;
+      
+      const displays = screen.getAllDisplays();
+      
+      for (let i = 0; i < displays.length; i++) {
+        const display = displays[i];
+        const { x, y, width, height } = display.bounds;
+        
+        // Check if window center is within this display's bounds
+        if (windowCenterX >= x && windowCenterX < x + width &&
+            windowCenterY >= y && windowCenterY < y + height) {
+          console.log(`[ScreenshotHelper] Window is on screen ${i} (${display.label || 'Unknown'})`);
+          return i;
+        }
+      }
+      
+      // Fallback to primary screen if window position doesn't match any display
+      console.log('[ScreenshotHelper] Window position not found on any display, using primary screen (0)');
+      return 0;
+    } catch (error) {
+      console.error('[ScreenshotHelper] Error detecting window screen:', error);
+      return 0;
+    }
+  }
+
 
   /**
    * Captures screenshot using screenshot-desktop library
    */
-  private async captureScreenshot(): Promise<Buffer> {
+  private async captureScreenshot(window?: BrowserWindow): Promise<Buffer> {
     try {
+      // Detect which screen the window is on
+      const screenIndex = this.getWindowScreenIndex(window);
+      
       // Use PNG format for better quality
       const buffer = await screenshot({ 
         format: 'png',
-        screen: 0, // Use primary screen only
+        screen: screenIndex, // Use the screen where the window is located
       });
       
       if (!buffer || buffer.length === 0) {
@@ -79,7 +118,7 @@ export class ScreenshotHelper {
         console.error('[ScreenshotHelper] Fallback screenshot method failed:', fallbackError);
       }
       
-      throw new Error(`Failed to capture screenshot: ${error.message}`);
+      throw new Error(`Failed to capture screenshot: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -120,7 +159,7 @@ export class ScreenshotHelper {
       }
       
       // Capture screenshot
-      const screenshotBuffer = await this.captureScreenshot();
+      const screenshotBuffer = await this.captureScreenshot(mainWindow);
       
       if (!screenshotBuffer || screenshotBuffer.length === 0) {
         throw new Error('Screenshot capture returned empty buffer');
@@ -232,17 +271,27 @@ export class ScreenshotHelper {
   /**
    * Gets image preview as base64
    */
-  public async getImagePreview(filepath: string): Promise<string> {
+  public async getImagePreview(filepath: string): Promise<{ success: boolean; preview?: string; error?: string }> {
     try {
       if (!fs.existsSync(filepath)) {
-        return '';
+        return { success: false, error: 'Image file does not exist' };
+      }
+      
+      const stats = fs.statSync(filepath);
+      if (!stats.isFile()) {
+        return { success: false, error: 'Path is not a file' };
       }
       
       const data = fs.readFileSync(filepath);
-      return `data:image/png;base64,${data.toString('base64')}`;
+      if (data.length === 0) {
+        return { success: false, error: 'Image file is empty' };
+      }
+      
+      const preview = `data:image/png;base64,${data.toString('base64')}`;
+      return { success: true, preview };
     } catch (error) {
       console.error('[ScreenshotHelper] Error reading image:', error);
-      return '';
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
     }
   }
 
@@ -262,7 +311,7 @@ export class ScreenshotHelper {
       return { success: true };
     } catch (error) {
       console.error('[ScreenshotHelper] Error deleting screenshot:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: error instanceof Error ? error.message : String(error) };
     }
   }
 

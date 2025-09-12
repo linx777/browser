@@ -12,6 +12,7 @@ import { Electron } from 'namespaces/_electronist';
 import { makeAssociation } from './association';
 import { globalShortcutsHelper } from './globalShortcuts';
 import { screenshotHelper } from './screenshotHelper'; // Initialize screenshotHelper to clear screenshots on startup
+import { isAIServiceURL, getAllAIServiceInputSelectors, getAIServicesByPriority } from './config/aiServices';
 void screenshotHelper; // Ensure screenshotHelper is initialized
 import {
   createWindow,
@@ -48,11 +49,13 @@ export const startChatGPTClickListening = () => {
     
     // Set flag to indicate we're listening
     isListeningForChatGPTClick = true;
+    console.log('Started listening for ChatGPT input clicks');
     
     // Set timeout
     chatgptClickTimeout = setTimeout(() => {
       isListeningForChatGPTClick = false;
       chatgptClickTimeout = null;
+      console.log('Stopped listening for ChatGPT input clicks (timeout)');
     }, 3500);
     
     return true;
@@ -78,30 +81,35 @@ export const stopChatGPTClickListening = () => {
 };
 
 
-// Function to focus ChatGPT input area
+// Function to focus AI service input area
 export const focusChatGPTInput = () => {
   try {
     // Get all browser webviews
     const browsers = getBrowsers();
     
-    // Find ChatGPT tab/webview
-    let chatgptWebContents = null;
-    for (const [, webContents] of Object.entries(browsers)) {
-      const url = webContents.getURL();
-      if (url.includes('chat.openai.com') || url.includes('chatgpt.com')) {
-        chatgptWebContents = webContents;
-        break;
+    // Find AI service tab/webview (prioritized by configuration)
+    let aiServiceWebContents = null;
+    const aiServices = getAIServicesByPriority();
+    
+    for (const service of aiServices) {
+      for (const [, webContents] of Object.entries(browsers)) {
+        const url = webContents.getURL();
+        if (service.urls.some(serviceUrl => url.includes(serviceUrl))) {
+          aiServiceWebContents = webContents;
+          break;
+        }
       }
+      if (aiServiceWebContents) break;
     }
     
-    if (chatgptWebContents) {
-      // First switch to the ChatGPT browser tab
+    if (aiServiceWebContents) {
+      // First switch to the AI service browser tab
       const { getMainWindow } = require('./browser');
       
       // Find the browser ID that corresponds to this webContents ID
       let targetBrowserId = null;
       for (const [browserId, webContents] of Object.entries(browsers)) {
-        if (webContents.id === chatgptWebContents.id) {
+        if (webContents.id === aiServiceWebContents.id) {
           targetBrowserId = browserId;
           break;
         }
@@ -115,38 +123,21 @@ export const focusChatGPTInput = () => {
         }
       }
       
-      // Focus the ChatGPT webview
-      chatgptWebContents.focus();
+      // Focus the AI service webview
+      aiServiceWebContents.focus();
       
       // Wait a moment for focus to take effect, then focus the input
       setTimeout(() => {
-        chatgptWebContents.executeJavaScript(`
+        aiServiceWebContents.executeJavaScript(`
           (() => {
             try {
-              // ChatGPT input selectors
-              const chatgptSelectors = [
-                'div[contenteditable="true"][id="prompt-textarea"]',
-                'div[contenteditable="true"][id="prompt-textarea"].ProseMirror',
-                'textarea[placeholder*="Ask anything"]',
-                'textarea[placeholder*="ask anything"]', 
-                'textarea[placeholder*="Ask"]',
-                'textarea[placeholder*="ask"]',
-                'input[placeholder*="Ask anything"]',
-                'input[placeholder*="ask anything"]',
-                'input[placeholder*="Ask"]',
-                'input[placeholder*="ask"]',
-                'textarea[data-testid*="input"]',
-                'textarea[data-testid*="textbox"]',
-                'textarea[aria-label*="input"]',
-                'textarea[aria-label*="textbox"]',
-                'div[contenteditable="true"][data-testid*="input"]',
-                'div[contenteditable="true"][data-testid*="textbox"]'
-              ];
+              // AI service input selectors
+              const aiServiceSelectors = ${JSON.stringify(getAllAIServiceInputSelectors())};
               
               let inputElement = null;
               
               // Try each selector
-              for (const selector of chatgptSelectors) {
+              for (const selector of aiServiceSelectors) {
                 inputElement = document.querySelector(selector);
                 if (inputElement) {
                   break;
@@ -176,41 +167,24 @@ export const focusChatGPTInput = () => {
   }
 };
 
-// Function to detect ChatGPT input clicks and auto-paste
+// Function to detect AI service input clicks and auto-paste
 const setupChatGPTInputClickDetection = (webContents: any) => {
   const url = webContents.getURL();
-  if (!url.includes('chat.openai.com') && !url.includes('chatgpt.com')) {
+  if (!isAIServiceURL(url)) {
     return;
   }
 
-  // Inject click detection script into ChatGPT pages
+  // Inject click detection script into AI service pages
   webContents.executeJavaScript(`
     (() => {
-      // ChatGPT input selectors
-      const chatgptSelectors = [
-        'div[contenteditable="true"][id="prompt-textarea"]',
-        'div[contenteditable="true"][id="prompt-textarea"].ProseMirror',
-        'textarea[placeholder*="Ask anything"]',
-        'textarea[placeholder*="ask anything"]', 
-        'textarea[placeholder*="Ask"]',
-        'textarea[placeholder*="ask"]',
-        'input[placeholder*="Ask anything"]',
-        'input[placeholder*="ask anything"]',
-        'input[placeholder*="Ask"]',
-        'input[placeholder*="ask"]',
-        'textarea[data-testid*="input"]',
-        'textarea[data-testid*="textbox"]',
-        'textarea[aria-label*="input"]',
-        'textarea[aria-label*="textbox"]',
-        'div[contenteditable="true"][data-testid*="input"]',
-        'div[contenteditable="true"][data-testid*="textbox"]'
-      ];
+      // AI service input selectors
+      const aiServiceSelectors = ${JSON.stringify(getAllAIServiceInputSelectors())};
       
-      // Function to check if element matches ChatGPT input selectors
-      function isChatGPTInput(element) {
+      // Function to check if element matches AI service input selectors
+      function isAIServiceInput(element) {
         if (!element) return false;
         
-        for (const selector of chatgptSelectors) {
+        for (const selector of aiServiceSelectors) {
           if (element.matches && element.matches(selector)) {
             return true;
           }
@@ -219,7 +193,7 @@ const setupChatGPTInputClickDetection = (webContents: any) => {
         // Check parent elements
         let parent = element.parentElement;
         while (parent && parent !== document.body) {
-          for (const selector of chatgptSelectors) {
+          for (const selector of aiServiceSelectors) {
             if (parent.matches && parent.matches(selector)) {
               return true;
             }
@@ -232,7 +206,9 @@ const setupChatGPTInputClickDetection = (webContents: any) => {
       
       // Add click listener to document
       document.addEventListener('click', (event) => {
-        if (isChatGPTInput(event.target)) {
+        console.log('Click detected on element:', event.target);
+        if (isAIServiceInput(event.target)) {
+          console.log('AI service input clicked, sending paste message');
           // Send message to main process to trigger paste
           console.log(JSON.stringify({
             type: 'CHATGPT_INPUT_CLICKED',
@@ -241,43 +217,38 @@ const setupChatGPTInputClickDetection = (webContents: any) => {
         }
       }, true); // Use capture phase to catch clicks early
       
-      // ChatGPT input click detection enabled
+      // AI service input click detection enabled
     })();
   `).catch((_err: any) => {
     // Could not inject ChatGPT click detection
   });
 };
 
-// Function to switch focus to AI service and paste content (ChatGPT with Gemini fallback)
+// Function to switch focus to AI service and paste content (prioritized by configuration)
 const switchToChatGPTAndPaste = (content: string) => {
   try {
     // Get all browser webviews
     const browsers = getBrowsers();
     
-    // Find ChatGPT tab/webview first, then Gemini as fallback
-    let chatgptWebContents = null;
-    let geminiWebContents = null;
+    // Find AI service tab/webview (prioritized by configuration)
+    let targetWebContents = null;
+    let serviceName = 'None';
+    const aiServices = getAIServicesByPriority();
     
-    for (const [, webContents] of Object.entries(browsers)) {
-      const url = webContents.getURL();
-      if (url.includes('chat.openai.com') || url.includes('chatgpt.com')) {
-        chatgptWebContents = webContents;
-        break;
-      } else if (url.includes('gemini.google.com')) {
-        geminiWebContents = webContents;
+    for (const service of aiServices) {
+      for (const [, webContents] of Object.entries(browsers)) {
+        const url = webContents.getURL();
+        if (service.urls.some(serviceUrl => url.includes(serviceUrl))) {
+          targetWebContents = webContents;
+          serviceName = service.name;
+          break;
+        }
       }
+      if (targetWebContents) break;
     }
-    
-    // Use ChatGPT if available, otherwise fallback to Gemini
-    const targetWebContents = chatgptWebContents || geminiWebContents;
-    const serviceName = chatgptWebContents ? 'ChatGPT' : (geminiWebContents ? 'Gemini' : 'None');
-    
-    // Log which service is being used
-    console.log(`Using ${serviceName} for content paste`);
     
     if (targetWebContents) {
       // First, focus the input area using AppleScript
-      console.log(`Focusing input area for ${serviceName} before pasting content`);
       focusChatGPTInput();
       
       // Wait longer for AppleScript focus to take effect, then paste the content
@@ -288,38 +259,8 @@ const switchToChatGPTAndPaste = (content: string) => {
         targetWebContents.executeJavaScript(`
           (() => {
             try {
-              // Look for AI service input field with various selectors (ChatGPT and Gemini)
-              const aiServiceSelectors = [
-                // ChatGPT selectors
-                'div[contenteditable="true"][id="prompt-textarea"]',
-                'div[contenteditable="true"][id="prompt-textarea"].ProseMirror',
-                'textarea[placeholder*="Ask anything"]',
-                'textarea[placeholder*="ask anything"]', 
-                'textarea[placeholder*="Ask"]',
-                'textarea[placeholder*="ask"]',
-                'input[placeholder*="Ask anything"]',
-                'input[placeholder*="ask anything"]',
-                'input[placeholder*="Ask"]',
-                'input[placeholder*="ask"]',
-                'textarea[data-testid*="input"]',
-                'textarea[data-testid*="textbox"]',
-                'textarea[aria-label*="input"]',
-                'textarea[aria-label*="textbox"]',
-                'div[contenteditable="true"][data-testid*="input"]',
-                'div[contenteditable="true"][data-testid*="textbox"]',
-                // Gemini selectors
-                'textarea[placeholder*="Enter a prompt"]',
-                'textarea[placeholder*="enter a prompt"]',
-                'textarea[placeholder*="Type a message"]',
-                'textarea[placeholder*="type a message"]',
-                'textarea[placeholder*="Message"]',
-                'textarea[placeholder*="message"]',
-                'div[contenteditable="true"][data-testid*="prompt"]',
-                'div[contenteditable="true"][aria-label*="prompt"]',
-                'div[contenteditable="true"][aria-label*="message"]',
-                'textarea[aria-label*="prompt"]',
-                'textarea[aria-label*="message"]'
-              ];
+              // Look for AI service input field with various selectors
+              const aiServiceSelectors = ${JSON.stringify(getAllAIServiceInputSelectors())};
               
               let inputElement = null;
               
@@ -558,6 +499,11 @@ const makeAppEvents = () => {
         setupChatGPTInputClickDetection(webContents);
       });
       
+      // Also set up click detection when navigation completes (for SPA changes)
+      webContents.on('did-finish-load', () => {
+        setupChatGPTInputClickDetection(webContents);
+      });
+      
       // Listen for custom messages from the webview
       webContents.addListener('console-message', (_event, _level, message) => {
         try {
@@ -580,12 +526,16 @@ const makeAppEvents = () => {
             // Switch focus to ChatGPT and paste content
             switchToChatGPTAndPaste(data.content);
           } else if (data.type === 'CHATGPT_INPUT_CLICKED' && data.action === 'simulate_paste') {
+            console.log('Received ChatGPT input click message, listening state:', isListeningForChatGPTClick);
             // Only simulate paste if we're currently listening
             if (isListeningForChatGPTClick) {
+              console.log('Simulating paste on ChatGPT input');
               // Use the webContents that sent the message directly
               webContents.paste();
               // Stop listening after successful paste
               stopChatGPTClickListening();
+            } else {
+              console.log('Not listening for ChatGPT clicks, ignoring paste request');
             }
           }
         } catch (error) {
@@ -820,9 +770,9 @@ const makeAppEvents = () => {
                 -ms-user-select: none;
               \`;
               
-              // Add double-click event listener for auto-paste functionality
+              // Add single-click event listener for auto-paste functionality
               if (isClickable) {
-                feedback.addEventListener('dblclick', () => {
+                feedback.addEventListener('click', (event) => {
                   // Send message to main process to switch focus to ChatGPT and paste content
                   console.log(JSON.stringify({
                     type: 'SWITCH_TO_CHATGPT_AND_PASTE',
@@ -973,7 +923,7 @@ const makeAppEvents = () => {
                           currentContent.length > 2) {
                         lastClipboardContent = currentContent;
                         
-                        // Clipboard monitoring is now disabled - auto-paste only happens on double-click
+                        // Clipboard monitoring is now disabled - auto-paste only happens on single-click
                         // No automatic auto-paste functionality
                       }
                     }).catch(err => {

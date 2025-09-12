@@ -159,8 +159,9 @@ export const TopBar = () => {
     dispatch(setActiveTab(nextTabId));
   }, [activeTab, dispatch, tabs]);
 
-  const colorSchemeChangeListener = (e: MediaQueryListEvent) => {
-    const colorScheme = e.matches ? 'dark-theme' : 'light-theme';
+  const colorSchemeChangeListener = (_e: MediaQueryListEvent) => {
+    // Always use dark theme regardless of system preference
+    const colorScheme = 'dark-theme';
     // @ts-ignore
     window.document.querySelector('body').className = colorScheme;
   };
@@ -232,11 +233,8 @@ export const TopBar = () => {
 
   useEffect(() => {
     // @ts-ignore
-    window.document.querySelector('body').className = window.matchMedia(
-      '(prefers-color-scheme: dark)'
-    ).matches
-      ? 'dark-theme'
-      : 'light-theme';
+    // Set dark theme as default
+    window.document.querySelector('body').className = 'dark-theme';
 
     window
       .matchMedia('(prefers-color-scheme: dark)')

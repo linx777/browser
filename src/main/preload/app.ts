@@ -120,6 +120,12 @@ contextBridge.exposeInMainWorld('app', {
     stopChatGPTClickListening: (): Promise<{success: boolean, error?: string}> => {
       return ipcRenderer.invoke('stop-chatgpt-click-listening');
     },
+    focusChatGPTInput: (): Promise<{success: boolean, error?: string}> => {
+      return ipcRenderer.invoke('focus-chatgpt-input');
+    },
+    simulatePaste: (): Promise<{success: boolean, error?: string}> => {
+      return ipcRenderer.invoke('simulate-paste');
+    },
   },
   config: {
     getAll: () => ipcRenderer.invoke('get-all-store-values'),
