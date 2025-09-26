@@ -365,8 +365,7 @@ export class GlobalShortcutsHelper {
         // Also clear copy toasts by executing JavaScript in all webviews
         this.mainWindow.webContents.executeJavaScript(`
           // Clear all copy toasts (bonbon-notification elements)
-          const copyToasts = document.querySelectorAll('.bonbon-notification');
-          copyToasts.forEach(toast => toast.remove());
+          document.querySelectorAll('.bonbon-notification').forEach(toast => toast.remove());
         `).catch(() => {
           // Silently handle errors
         });
@@ -379,8 +378,7 @@ export class GlobalShortcutsHelper {
         if (webContents && !webContents.isDestroyed()) {
           webContents.executeJavaScript(`
             // Clear all copy toasts (bonbon-notification elements)
-            const copyToasts = document.querySelectorAll('.bonbon-notification');
-            copyToasts.forEach(toast => toast.remove());
+            document.querySelectorAll('.bonbon-notification').forEach(toast => toast.remove());
           `).catch(() => {
             // Silently handle errors
           });

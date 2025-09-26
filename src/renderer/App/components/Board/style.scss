@@ -14,6 +14,11 @@
     }
   }
 
+  // Ensure Board uses full available width when minimap is not always on
+  &:not(.Board__minimap-always-on) {
+    width: calc(100% - 50px);
+  }
+
   .Board__edge-snap-left,  
   .Board__edge-snap-right, 
   .Board__edge-snap-maximized {

@@ -7,7 +7,7 @@
 
 #Minimap__detection-zone {
   height: 100%;
-  width: 20px;
+  width: 1px;
   background: transparent;
   position: fixed;
   right: 0;

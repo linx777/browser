@@ -1128,8 +1128,9 @@ app
           }
         }
 
-        if (!app.isPackaged)
-          mainWindow?.webContents.openDevTools({ mode: 'detach' });
+        // Developer tools auto-opening disabled
+        // if (!app.isPackaged)
+        //   mainWindow?.webContents.openDevTools({ mode: 'detach' });
 
         // Initialize global shortcuts
         globalShortcutsHelper.setMainWindow(mainWindow);

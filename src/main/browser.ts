@@ -83,7 +83,8 @@ export const createBrowserView = (options?: {
     options?.newSession || !tmpView ? createFreeBrowserView(options) : tmpView;
   setFreeView(createFreeBrowserView());
 
-  if (!app.isPackaged) view.webContents.toggleDevTools();
+  // Developer tools auto-opening disabled
+  // if (!app.isPackaged) view.webContents.toggleDevTools();
   const extensions = getExtensionsObject();
   if (mainWindow) extensions.addTab(view.webContents, mainWindow);
   view.webContents.focus();
@@ -107,7 +108,7 @@ export const createWindow = async (): Promise<BrowserWindow> => {
 
   mainWindow = new BrowserWindow({
     show: false,
-    width: process.platform === 'darwin' ? width : 1024,
+    width: Math.floor(3 * width / 5),
     height: process.platform === 'darwin' ? height : 768,
     icon: getAssetPath('icon.png'),
     titleBarStyle: 'hidden',

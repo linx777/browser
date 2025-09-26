@@ -185,8 +185,9 @@ export const Board = ({ isFullSize, boardId }: BoardProps) => {
         className={clsx({
           'Board__is-maximized': board.isFullSize || isFullSize,
           'Board__isnt-maximized': !board.isFullSize && !isFullSize,
-          'Board__minimap-always-on':
-            !board.isFullSize && settings['application.minimapOn'],
+          // Minimap is currently disabled, so don't apply minimap-always-on class
+          // 'Board__minimap-always-on':
+          //   !board.isFullSize && settings['application.minimapOn'],
         })}
       >
         <Notification
