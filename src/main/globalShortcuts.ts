@@ -8,12 +8,37 @@ export class GlobalShortcutsHelper {
   private isClickThrough: boolean = true; // Default to click-through enabled
   private mouseTrackingInterval: NodeJS.Timeout | null = null;
   private lastManualToggle: number = 0; // Track when user manually toggles click-through
+  private currentZoomFactor: number = 1; // Track current zoom across views
+  // Persistent disable lock toggled by Cmd/Ctrl + double-press T
+  private persistentDisableLock: boolean = false;
+  private lastTPressTime: number = 0;
+  private readonly doublePressThresholdMs: number = 350;
+  private tSinglePressTimer: NodeJS.Timeout | null = null;
+
+  // Dynamic registration control for zoom shortcuts
+  private zoomShortcutsRegistered: boolean = false;
+  private readonly zoomInAccelerators: string[] = [
+    'CommandOrControl+=',
+    'CommandOrControl+Shift+='
+  ];
+  private readonly zoomOutAccelerators: string[] = [
+    'CommandOrControl+-'
+  ];
+
+  // Track critical shortcuts that must remain always-on
+  private readonly criticalAccelerators: string[] = [
+    'CommandOrControl+B', // toggle visibility
+  ];
 
   constructor() {
     // Unregister shortcuts when quitting
     app.on('will-quit', () => {
       globalShortcut.unregisterAll();
       this.stopMouseTracking();
+      if (this.tSinglePressTimer) {
+        clearTimeout(this.tSinglePressTimer);
+        this.tSinglePressTimer = null;
+      }
     });
   }
 
@@ -31,13 +56,30 @@ export class GlobalShortcutsHelper {
       window.on('ready-to-show', () => {
         this.startMouseTracking();
         console.log('Started mouse tracking for automatic click-through');
+        this.updateZoomShortcutsRegistration();
       });
       
       // Stop mouse tracking when window is closed
       window.on('closed', () => {
         this.stopMouseTracking();
         console.log('Stopped mouse tracking');
+        this.unregisterZoomShortcuts();
       });
+
+      // Update zoom shortcut registration on window visibility changes
+      window.on('show', () => this.updateZoomShortcutsRegistration());
+      window.on('hide', () => this.updateZoomShortcutsRegistration());
+      window.on('minimize', () => this.updateZoomShortcutsRegistration());
+      window.on('restore', () => this.updateZoomShortcutsRegistration());
+
+      // Ensure critical shortcuts remain registered regardless of visibility
+      const ensure = () => this.ensureCriticalShortcuts();
+      window.on('show', ensure);
+      window.on('hide', ensure);
+      window.on('minimize', ensure);
+      window.on('restore', ensure);
+      // Also ensure after ready-to-show
+      window.on('ready-to-show', ensure);
     }
   }
 
@@ -76,15 +118,42 @@ export class GlobalShortcutsHelper {
       this.adjustOpacity(0.1);
     });
 
-    // Click-through toggle shortcut
+    // Click-through shortcuts
+    // Single press Cmd/Ctrl+T => temporarily disable click-through
+    // Double-press Cmd/Ctrl+T within threshold => toggle persistent disable lock
     globalShortcut.register('CommandOrControl+T', () => {
-      this.disableClickThrough();
+      const now = Date.now();
+      // If second press within threshold => treat as double press
+      if (now - this.lastTPressTime <= this.doublePressThresholdMs) {
+        this.lastTPressTime = 0;
+        if (this.tSinglePressTimer) {
+          clearTimeout(this.tSinglePressTimer);
+          this.tSinglePressTimer = null;
+        }
+        this.togglePersistentDisable();
+        return;
+      }
+      // First press: arm a timer for single-press action
+      this.lastTPressTime = now;
+      if (this.tSinglePressTimer) {
+        clearTimeout(this.tSinglePressTimer);
+        this.tSinglePressTimer = null;
+      }
+      this.tSinglePressTimer = setTimeout(() => {
+        this.tSinglePressTimer = null;
+        // Single press behavior: temporarily disable click-through
+        this.disableClickThrough();
+        this.lastTPressTime = 0;
+      }, this.doublePressThresholdMs + 10);
     });
 
     // Screenshot shortcut
     globalShortcut.register('CommandOrControl+H', async () => {
       await this.takeScreenshot();
     });
+
+    // Register zoom shortcuts dynamically based on visibility and click-through state
+    this.updateZoomShortcutsRegistration();
 
     // Clear all data shortcut (screenshots, toasts, clipboard)
     globalShortcut.register('CommandOrControl+R', async () => {
@@ -109,6 +178,24 @@ export class GlobalShortcutsHelper {
   }
 
   /**
+   * Ensure critical shortcuts like Cmd/Ctrl+B stay registered system-wide
+   */
+  private ensureCriticalShortcuts(): void {
+    this.criticalAccelerators.forEach((acc) => {
+      try {
+        if (!globalShortcut.isRegistered(acc)) {
+          globalShortcut.register(acc, () => {
+            if (acc === 'CommandOrControl+B') this.toggleWindowVisibility();
+          });
+          console.log(`Re-registered critical shortcut: ${acc}`);
+        }
+      } catch (e) {
+        // Best-effort: ignore re-register errors
+      }
+    });
+  }
+
+  /**
    * Moves the window left
    */
   private moveWindowLeft(): void {
@@ -116,7 +203,8 @@ export class GlobalShortcutsHelper {
     
     const [currentX, currentY] = this.mainWindow.getPosition();
     const moveDistance = 10;
-    const newX = Math.max(0, currentX - moveDistance);
+    // Allow negative X positions so window can move beyond the left edge
+    const newX = currentX - moveDistance;
     
     this.mainWindow.setPosition(newX, currentY);
   }
@@ -187,14 +275,48 @@ export class GlobalShortcutsHelper {
   }
 
   /**
+   * Adjusts zoom factor of the currently selected BrowserView
+   */
+  private adjustZoom(delta: number): void {
+    try {
+      // Only allow zoom when window is visible and click-through is disabled
+      if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
+      if (!this.mainWindow.isVisible()) return;
+      if (this.isClickThrough) return;
+
+      const { getSelectedView } = require('./browser');
+      const view = getSelectedView();
+      if (!view || view.webContents.isDestroyed()) return;
+
+      // Use webContents zoomFactor which applies to the page
+      const wc: any = view.webContents as any;
+      const current: number = typeof wc.getZoomFactor === 'function' ? wc.getZoomFactor() : this.currentZoomFactor;
+      const next = Math.max(0.25, Math.min(3, +(current + delta).toFixed(2)));
+      if (typeof wc.setZoomFactor === 'function') wc.setZoomFactor(next);
+      this.currentZoomFactor = next;
+    } catch (err) {
+      // ignore
+    }
+  }
+
+  /**
    * Enables click-through mode (default state)
    */
   enableClickThrough(): void {
     if (!this.mainWindow) return;
-
-    this.mainWindow.setIgnoreMouseEvents(true, { forward: true });
-    this.isClickThrough = true;
+    // If persistent disable lock is active, ignore enable requests
+    if (this.persistentDisableLock) {
+      console.log('Enable click-through ignored due to persistent disable lock');
+      return;
+    }
+    try {
+      this.mainWindow.setIgnoreMouseEvents(true, { forward: true });
+      this.isClickThrough = true;
+    } catch (e) {
+      console.error('Failed to enable click-through:', e);
+    }
     console.log('Click-through enabled - clicks will pass through');
+    this.updateZoomShortcutsRegistration();
   }
 
   /**
@@ -206,9 +328,14 @@ export class GlobalShortcutsHelper {
     // Record manual toggle time to prevent mouse tracking interference
     this.lastManualToggle = Date.now();
 
-    this.mainWindow.setIgnoreMouseEvents(false);
-    this.isClickThrough = false;
+    try {
+      this.mainWindow.setIgnoreMouseEvents(false);
+      this.isClickThrough = false;
+    } catch (e) {
+      console.error('Failed to disable click-through:', e);
+    }
     console.log('Click-through disabled - normal mouse interaction restored');
+    this.updateZoomShortcutsRegistration();
   }
 
   /**
@@ -237,6 +364,8 @@ export class GlobalShortcutsHelper {
     
     this.mouseTrackingInterval = setInterval(() => {
       if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
+      // Do not auto-toggle when persistent disable lock is active
+      if (this.persistentDisableLock) return;
       
       // Don't interfere with manual toggles for 2 seconds
       if (Date.now() - this.lastManualToggle < 2000) return;
@@ -260,6 +389,21 @@ export class GlobalShortcutsHelper {
       // Note: We never automatically disable click-through when mouse enters window
       // User must manually use Ctrl+T to disable click-through for interaction
     }, 100); // Check every 100ms for responsive behavior
+  }
+
+  /**
+   * Toggles persistent disable lock via double-press
+   * When enabled, click-through stays disabled until toggled again
+   */
+  private togglePersistentDisable(): void {
+    this.persistentDisableLock = !this.persistentDisableLock;
+    if (this.persistentDisableLock) {
+      console.log('Persistent disable lock enabled - click-through stays disabled');
+      this.disableClickThrough();
+    } else {
+      console.log('Persistent disable lock disabled - restoring click-through');
+      this.enableClickThrough();
+    }
   }
 
   /**
@@ -389,6 +533,56 @@ export class GlobalShortcutsHelper {
     }
   }
 
+  /**
+   * Registers zoom-related global shortcuts
+   */
+  private registerZoomShortcuts(): void {
+    if (this.zoomShortcutsRegistered) return;
+    let successCount = 0;
+    this.zoomInAccelerators.forEach((acc) => {
+      try {
+        globalShortcut.register(acc, () => this.adjustZoom(0.1));
+        successCount += 1;
+      } catch (e) {
+        console.warn(`Failed to register accelerator: ${acc}`, e);
+      }
+    });
+    this.zoomOutAccelerators.forEach((acc) => {
+      try {
+        globalShortcut.register(acc, () => this.adjustZoom(-0.1));
+        successCount += 1;
+      } catch (e) {
+        console.warn(`Failed to register accelerator: ${acc}`, e);
+      }
+    });
+    this.zoomShortcutsRegistered = successCount > 0;
+    if (this.zoomShortcutsRegistered) console.log('Zoom shortcuts registered');
+  }
+
+  /**
+   * Unregisters zoom-related global shortcuts
+   */
+  private unregisterZoomShortcuts(): void {
+    if (!this.zoomShortcutsRegistered) return;
+    [...this.zoomInAccelerators, ...this.zoomOutAccelerators].forEach((acc) => {
+      try {
+        globalShortcut.unregister(acc);
+      } catch (e) {
+        // ignore
+      }
+    });
+    this.zoomShortcutsRegistered = false;
+    console.log('Zoom shortcuts unregistered');
+  }
+
+  /**
+   * Conditionally register/unregister zoom shortcuts based on app visibility and click-through state
+   */
+  private updateZoomShortcutsRegistration(): void {
+    const allowed = !!this.mainWindow && !this.mainWindow.isDestroyed() && this.mainWindow.isVisible() && !this.isClickThrough;
+    if (allowed) this.registerZoomShortcuts();
+    else this.unregisterZoomShortcuts();
+  }
 }
 
 // Export a singleton instance

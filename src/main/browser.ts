@@ -125,6 +125,7 @@ export const createWindow = async (): Promise<BrowserWindow> => {
 
   mainWindow.setMenu(null);
 
+
   // Enhanced screen capture resistance
   mainWindow.setContentProtection(true);
 

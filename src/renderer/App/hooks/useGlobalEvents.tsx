@@ -139,6 +139,8 @@ export const useGlobalEvents = () => {
             webview?.stopFindInPage('clearSelection');
           }
         }
+        
+        // Zoom-in via Cmd/Ctrl is handled in main process via global shortcuts
         keysPressed = [];
         keyDownTimeoutId = null;
       }, 400) as unknown as number;

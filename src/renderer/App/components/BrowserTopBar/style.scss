@@ -1,5 +1,6 @@
 .BrowserTopBar__container {
-  background-color: var(--color-background-primary);
+  /* 10% toolbar background tint */
+  background-color: rgba(0, 0, 0, 0.1);
   height: 25px;
   display: flex;
   flex-direction: row;

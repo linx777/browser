@@ -23,6 +23,7 @@ import { DownloadState } from 'renderer/TitleBar/components/TopBar/Types';
 declare global {
   interface Window {
     app: {
+      getClickThroughState: () => Promise<{success: boolean; isClickThrough?: boolean; error?: string}>;
       board: {
         close: () => void;
         add: (params?: { newSession?: boolean }) => void;
