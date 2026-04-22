@@ -1,6 +1,10 @@
-import { EventParams } from "types/analytics";
-import { Board } from "types/boards";
-import { IpcInspectElement, IpcRenameTab, IpcShowTabContextMenu } from "types/ipc";
+import { EventParams } from 'types/analytics';
+import { Board } from 'types/boards';
+import {
+  IpcInspectElement,
+  IpcRenameTab,
+  IpcShowTabContextMenu,
+} from 'types/ipc';
 
 declare global {
   interface Window {
@@ -21,20 +25,61 @@ declare global {
         inspectElement: (point: IpcInspectElement) => void;
       };
       listener: {
-        openTab: (action: (_e: IpcRendererEvent, args: { id?: string; label?: string; }) => void) => void;
-        closeTab: (action: (_e: IpcRendererEvent, args: { x: number; y: number }) => void) => void;
-        renameTab: (action: (_e: IpcRendererEvent, args: { x: number; y: number; }) => void) => void;
-        saveBoard: (action: (_e: IpcRendererEvent, args: { x: number; y: number; }) => void) => void;
+        openTab: (
+          action: (
+            _e: IpcRendererEvent,
+            args: { id?: string; label?: string }
+          ) => void
+        ) => void;
+        closeTab: (
+          action: (_e: IpcRendererEvent, args: { x: number; y: number }) => void
+        ) => void;
+        renameTab: (
+          action: (_e: IpcRendererEvent, args: { x: number; y: number }) => void
+        ) => void;
+        saveBoard: (
+          action: (_e: IpcRendererEvent, args: { x: number; y: number }) => void
+        ) => void;
         closeActiveTab: (action: () => void) => void;
         selectNextBoard: (action: () => void) => void;
-        setWindowsCount: (action: (_e: IpcRendererEvent, args: { boardId: string; count: number; }) => void) => void;
+        setWindowsCount: (
+          action: (
+            _e: IpcRendererEvent,
+            args: { boardId: string; count: number }
+          ) => void
+        ) => void;
         closeAllTab: (action: () => void) => void;
-        closeOthersTab: (action: (_e: IpcRendererEvent, args: { x: number; y: number; }) => void) => void;
-        downloadState: (action: (_e: IpcRendererEvent, state: DownloadState) => void) => void;
-        removeExtension: (action: (_e: IpcRendererEvent, id: string) => void) => void;
+        closeOthersTab: (
+          action: (_e: IpcRendererEvent, args: { x: number; y: number }) => void
+        ) => void;
+        downloadState: (
+          action: (_e: IpcRendererEvent, state: DownloadState) => void
+        ) => void;
+        removeExtension: (
+          action: (_e: IpcRendererEvent, id: string) => void
+        ) => void;
         hideDownloadsPreview: (action: () => void) => void;
         appClicked: (action: () => void) => void;
-        loadSavedBoard: (action: (_e: IpcRendererEvent, board: Board) => void) => void;
+        loadSavedBoard: (
+          action: (_e: IpcRendererEvent, board: Board) => void
+        ) => void;
+        clickThroughState: (
+          action: (
+            _e: IpcRendererEvent,
+            args: {
+              isClickThrough: boolean;
+              isClickThroughAutomationEnabled: boolean;
+            }
+          ) => void
+        ) => void;
+        pasteRoutingState: (
+          action: (
+            _e: IpcRendererEvent,
+            args: {
+              isPasteRoutingEnabled: boolean;
+            }
+          ) => void
+        ) => void;
       };
       off: {
         openTab: () => void;
@@ -51,9 +96,21 @@ declare global {
         hideDownloadsPreview: () => void;
         appClicked: () => void;
         loadSavedBoard: () => void;
+        clickThroughState: () => void;
+        pasteRoutingState: () => void;
       };
       tabs: {
-        select: ({tabId, newSession, isSavedBoard, board}: {tabId: string, newSession?: boolean, isSavedBoard?: boolean, board?: Board}) => void;
+        select: ({
+          tabId,
+          newSession,
+          isSavedBoard,
+          board,
+        }: {
+          tabId: string;
+          newSession?: boolean;
+          isSavedBoard?: boolean;
+          board?: Board;
+        }) => void;
         purge: (tabId: string) => void;
         save: (tabId: string) => void;
         rename: (args: IpcRenameTab) => void;
@@ -64,7 +121,33 @@ declare global {
       };
       os: {
         getPlatform: () => string;
-      }
+      };
+      toggleClickThrough: () => Promise<{
+        success: boolean;
+        isClickThrough?: boolean;
+        isClickThroughAutomationEnabled?: boolean;
+        error?: string;
+      }>;
+      getClickThroughState: () => Promise<{
+        success: boolean;
+        isClickThrough?: boolean;
+        isClickThroughAutomationEnabled?: boolean;
+        error?: string;
+      }>;
+      togglePasteRouting: () => Promise<{
+        success: boolean;
+        isPasteRoutingEnabled?: boolean;
+        error?: string;
+      }>;
+      getPasteRoutingState: () => Promise<{
+        success: boolean;
+        isPasteRoutingEnabled?: boolean;
+        error?: string;
+      }>;
+      routeClipboardToChatGPT: () => Promise<{
+        success: boolean;
+        error?: string;
+      }>;
     };
   }
 }

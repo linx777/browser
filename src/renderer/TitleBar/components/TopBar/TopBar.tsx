@@ -10,6 +10,9 @@ import AddIcon from '@mui/icons-material/Add';
 import clsx from 'clsx';
 import CloseIcon from '@mui/icons-material/Close';
 import MenuIcon from '@mui/icons-material/Menu';
+import ToggleOffIcon from '@mui/icons-material/ToggleOff';
+import ToggleOnIcon from '@mui/icons-material/ToggleOn';
+import ContentPasteIcon from '@mui/icons-material/ContentPaste';
 import { Reorder } from 'framer-motion';
 import DownloadingIcon from '@mui/icons-material/Downloading';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
@@ -35,15 +38,111 @@ import { DownloadState } from './Types';
 
 import './style.scss';
 
+type ClickThroughStateResponse = {
+  success: boolean;
+  isClickThrough?: boolean;
+  isClickThroughAutomationEnabled?: boolean;
+  error?: string;
+};
+
+type PasteRoutingStateResponse = {
+  success: boolean;
+  isPasteRoutingEnabled?: boolean;
+  error?: string;
+};
+
+const isEditableElement = (target: EventTarget | null) => {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+
+  if (target.isContentEditable) {
+    return true;
+  }
+
+  const tagName = target.tagName.toLowerCase();
+  return tagName === 'input' || tagName === 'textarea' || tagName === 'select';
+};
+
+const isPasteShortcutEvent = (event: KeyboardEvent) => {
+  const key = event.key?.toLowerCase();
+  const primaryModifier =
+    window.titleBar.os.getPlatform() === 'darwin'
+      ? event.metaKey
+      : event.ctrlKey;
+
+  return (
+    key === 'v' &&
+    primaryModifier &&
+    !event.altKey &&
+    !event.shiftKey &&
+    !event.repeat
+  );
+};
+
 export const TopBar = () => {
   const [downloadState, setDownloadState] = useState<DownloadState>(null);
+  const [isClickThrough, setIsClickThrough] = useState(true);
+  const [isClickThroughAutomationEnabled, setIsClickThroughAutomationEnabled] =
+    useState(true);
+  const [isClickThroughBusy, setIsClickThroughBusy] = useState(false);
+  const [isPasteRoutingEnabled, setIsPasteRoutingEnabled] = useState(false);
+  const [isPasteRoutingBusy, setIsPasteRoutingBusy] = useState(false);
   const { tabs, activeTab, isRenaming } = useAppSelector(
     (state) => state.tabs as TabsState
   );
   const dispatch = useAppDispatch();
 
+  const applyClickThroughState = useCallback(
+    (result?: ClickThroughStateResponse) => {
+      if (
+        result?.success &&
+        typeof result.isClickThrough === 'boolean' &&
+        typeof result.isClickThroughAutomationEnabled === 'boolean'
+      ) {
+        setIsClickThrough(result.isClickThrough);
+        setIsClickThroughAutomationEnabled(
+          result.isClickThroughAutomationEnabled
+        );
+        return true;
+      }
+
+      if (result?.error) {
+        console.error('Failed to sync click-through state:', result.error);
+      }
+
+      return false;
+    },
+    []
+  );
+
+  const applyPasteRoutingState = useCallback(
+    (result?: PasteRoutingStateResponse) => {
+      if (
+        result?.success &&
+        typeof result.isPasteRoutingEnabled === 'boolean'
+      ) {
+        setIsPasteRoutingEnabled(result.isPasteRoutingEnabled);
+        return true;
+      }
+
+      if (result?.error) {
+        console.error('Failed to sync paste routing state:', result.error);
+      }
+
+      return false;
+    },
+    []
+  );
+
   const pushTab = useCallback(
-    (params: { id?: string; label?: string, newSession?: boolean, isSavedBoard?: boolean, board?: BoardType }) => {
+    (params: {
+      id?: string;
+      label?: string;
+      newSession?: boolean;
+      isSavedBoard?: boolean;
+      board?: BoardType;
+    }) => {
       const id = params.id || v4();
       const newTab = {
         id,
@@ -51,7 +150,12 @@ export const TopBar = () => {
       };
 
       dispatch(addTab(newTab));
-      window.titleBar.tabs.select({tabId: id, newSession: params.newSession, isSavedBoard: params.isSavedBoard, board: params.board});
+      window.titleBar.tabs.select({
+        tabId: id,
+        newSession: params.newSession,
+        isSavedBoard: params.isSavedBoard,
+        board: params.board,
+      });
     },
     [dispatch]
   );
@@ -72,9 +176,12 @@ export const TopBar = () => {
   };
 
   const switchBoard = useCallback(
-    (args: {tabId: string, newSession?: boolean}) => {
+    (args: { tabId: string; newSession?: boolean }) => {
       if (!isRenaming) {
-        window.titleBar.tabs.select({tabId: args?.tabId, newSession: args.newSession});
+        window.titleBar.tabs.select({
+          tabId: args?.tabId,
+          newSession: args.newSession,
+        });
         window.titleBar.analytics.event('switch_board');
       }
     },
@@ -90,10 +197,10 @@ export const TopBar = () => {
     (_e: IpcRendererEvent, args: { id?: string; label?: string }) => {
       if (args && args?.id) {
         if (tabs?.find((t) => t.id === args?.id)) {
-          switchBoard({tabId: args.id});
+          switchBoard({ tabId: args.id });
         }
       } else {
-        pushTab({...args, id: v4()});
+        pushTab({ ...args, id: v4() });
       }
     },
     [pushTab, switchBoard, tabs]
@@ -207,25 +314,71 @@ export const TopBar = () => {
     setDownloadState(null);
   }, []);
 
-  const loadSavedBoardAction = useCallback((_e: IpcRendererEvent, board: Board) => {
-    pushTab({id: board.id, label: board.label, isSavedBoard: true, board})
-  }, [pushTab])
+  const loadSavedBoardAction = useCallback(
+    (_e: IpcRendererEvent, board: Board) => {
+      pushTab({ id: board.id, label: board.label, isSavedBoard: true, board });
+    },
+    [pushTab]
+  );
 
-  const removeExtensionListener = useCallback((_e: IpcRendererEvent, id: string) => {
-    const bal = document.querySelector('browser-action-list');
-    const balRoot = bal && bal.shadowRoot;
+  const removeExtensionListener = useCallback(
+    (_e: IpcRendererEvent, id: string) => {
+      const bal = document.querySelector('browser-action-list');
+      const balRoot = bal && bal.shadowRoot;
 
-    const toRemove = balRoot && balRoot.getElementById(id);
-    toRemove?.remove();
-  }, []);
+      const toRemove = balRoot && balRoot.getElementById(id);
+      toRemove?.remove();
+    },
+    []
+  );
 
-  const clickOnAddIcon = (event: {shiftKey: boolean}) => {
-    event.shiftKey ? pushTab({newSession: true}) : pushTab({})
-  }
+  const clickOnAddIcon = (event: { shiftKey: boolean }) => {
+    event.shiftKey ? pushTab({ newSession: true }) : pushTab({});
+  };
 
   const handleReorder = (newOrder: TabProps[]) => {
     dispatch(setTabs(newOrder));
   };
+
+  let clickThroughToggleTitle =
+    'Click-through automation is off. The window will stay interactive.';
+  if (isClickThroughAutomationEnabled && isClickThrough) {
+    clickThroughToggleTitle =
+      'Click-through automation is on. The window currently passes clicks through.';
+  } else if (isClickThroughAutomationEnabled) {
+    clickThroughToggleTitle =
+      'Click-through automation is on. The window is currently interactive until the normal logic re-enables click-through.';
+  }
+
+  const pasteRoutingToggleTitle = isPasteRoutingEnabled
+    ? 'Clipboard routing is on. Press Cmd/Ctrl+V in a browser tab to send clipboard text to ChatGPT.'
+    : 'Clipboard routing is off. Cmd/Ctrl+V will paste normally in browser tabs.';
+
+  const toggleClickThrough = useCallback(async () => {
+    setIsClickThroughBusy(true);
+
+    try {
+      const result = await window.titleBar.toggleClickThrough();
+      applyClickThroughState(result);
+    } catch (error) {
+      console.error('Failed to toggle click-through:', error);
+    } finally {
+      setIsClickThroughBusy(false);
+    }
+  }, [applyClickThroughState]);
+
+  const togglePasteRouting = useCallback(async () => {
+    setIsPasteRoutingBusy(true);
+
+    try {
+      const result = await window.titleBar.togglePasteRouting();
+      applyPasteRoutingState(result);
+    } catch (error) {
+      console.error('Failed to toggle paste routing:', error);
+    } finally {
+      setIsPasteRoutingBusy(false);
+    }
+  }, [applyPasteRoutingState]);
 
   const appClickedListener = useCallback(() => {
     dispatch(setIsRenaming(null));
@@ -257,7 +410,7 @@ export const TopBar = () => {
   }, [dblclickEventListener, tabs]);
 
   useEffect(() => {
-    switchBoard({tabId: activeTab});
+    switchBoard({ tabId: activeTab });
   }, [switchBoard, activeTab]);
 
   useEffect(() => {
@@ -331,6 +484,114 @@ export const TopBar = () => {
   }, [loadSavedBoardAction]);
 
   useEffect(() => {
+    const clickThroughStateListener = (
+      _e: IpcRendererEvent,
+      args: {
+        isClickThrough: boolean;
+        isClickThroughAutomationEnabled: boolean;
+      }
+    ) => {
+      if (
+        typeof args?.isClickThrough === 'boolean' &&
+        typeof args?.isClickThroughAutomationEnabled === 'boolean'
+      ) {
+        setIsClickThrough(args.isClickThrough);
+        setIsClickThroughAutomationEnabled(
+          args.isClickThroughAutomationEnabled
+        );
+      }
+    };
+
+    const syncClickThroughState = () => {
+      window.titleBar
+        .getClickThroughState()
+        .then((result) => {
+          applyClickThroughState(result);
+        })
+        .catch((error) => {
+          console.error('Failed to load click-through state:', error);
+        });
+    };
+
+    const hasClickThroughListener =
+      typeof window.titleBar.listener?.clickThroughState === 'function' &&
+      typeof window.titleBar.off?.clickThroughState === 'function';
+
+    let clickThroughPollInterval: number | undefined;
+
+    if (hasClickThroughListener) {
+      window.titleBar.listener.clickThroughState(clickThroughStateListener);
+    } else {
+      // Preload changes do not hot-reload reliably, so poll until Electron restarts.
+      clickThroughPollInterval = window.setInterval(
+        syncClickThroughState,
+        1000
+      );
+    }
+
+    syncClickThroughState();
+
+    return () => {
+      if (hasClickThroughListener) {
+        window.titleBar.off.clickThroughState();
+      }
+      if (clickThroughPollInterval) {
+        window.clearInterval(clickThroughPollInterval);
+      }
+    };
+  }, [applyClickThroughState]);
+
+  useEffect(() => {
+    const pasteRoutingStateListener = (
+      _e: IpcRendererEvent,
+      args: {
+        isPasteRoutingEnabled: boolean;
+      }
+    ) => {
+      if (typeof args?.isPasteRoutingEnabled === 'boolean') {
+        setIsPasteRoutingEnabled(args.isPasteRoutingEnabled);
+      }
+    };
+
+    const syncPasteRoutingState = () => {
+      window.titleBar
+        .getPasteRoutingState()
+        .then((result) => {
+          applyPasteRoutingState(result);
+        })
+        .catch((error) => {
+          console.error('Failed to load paste routing state:', error);
+        });
+    };
+
+    const hasPasteRoutingListener =
+      typeof window.titleBar.listener?.pasteRoutingState === 'function' &&
+      typeof window.titleBar.off?.pasteRoutingState === 'function';
+
+    let pasteRoutingPollInterval: number | undefined;
+
+    if (hasPasteRoutingListener) {
+      window.titleBar.listener.pasteRoutingState(pasteRoutingStateListener);
+    } else {
+      pasteRoutingPollInterval = window.setInterval(
+        syncPasteRoutingState,
+        1000
+      );
+    }
+
+    syncPasteRoutingState();
+
+    return () => {
+      if (hasPasteRoutingListener) {
+        window.titleBar.off.pasteRoutingState();
+      }
+      if (pasteRoutingPollInterval) {
+        window.clearInterval(pasteRoutingPollInterval);
+      }
+    };
+  }, [applyPasteRoutingState]);
+
+  useEffect(() => {
     if (tabs.length === 0) pushTab({});
   }, [tabs, pushTab]);
 
@@ -349,6 +610,35 @@ export const TopBar = () => {
     return () =>
       scrollContainer?.removeEventListener('wheel', wheelEventListener);
   }, []);
+
+  useEffect(() => {
+    const handleKeyDown = async (event: KeyboardEvent) => {
+      if (!isPasteRoutingEnabled || !isPasteShortcutEvent(event)) {
+        return;
+      }
+
+      if (isEditableElement(event.target)) {
+        return;
+      }
+
+      event.preventDefault();
+
+      try {
+        const result = await window.titleBar.routeClipboardToChatGPT();
+        if (!result.success) {
+          console.error('Failed to route clipboard to ChatGPT:', result.error);
+        }
+      } catch (error) {
+        console.error('Failed to route clipboard to ChatGPT:', error);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown, true);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown, true);
+    };
+  }, [isPasteRoutingEnabled]);
 
   return (
     <div
@@ -410,6 +700,48 @@ export const TopBar = () => {
         {/* @ts-ignore */}
         <browser-action-list />
         <div id="TopBar__menu-container">
+          <div
+            className={clsx(
+              'TopBar__menu-item',
+              'TopBar__state-toggle',
+              'TopBar__clipboard-routing-toggle',
+              {
+                'is-active': isPasteRoutingEnabled,
+                'is-busy': isPasteRoutingBusy,
+              }
+            )}
+            onClick={() => {
+              if (!isPasteRoutingBusy) {
+                togglePasteRouting();
+              }
+            }}
+            title={pasteRoutingToggleTitle}
+          >
+            <ContentPasteIcon />
+          </div>
+          <div
+            className={clsx(
+              'TopBar__menu-item',
+              'TopBar__state-toggle',
+              'TopBar__click-through-toggle',
+              {
+                'is-active': isClickThroughAutomationEnabled,
+                'is-busy': isClickThroughBusy,
+              }
+            )}
+            onClick={() => {
+              if (!isClickThroughBusy) {
+                toggleClickThrough();
+              }
+            }}
+            title={clickThroughToggleTitle}
+          >
+            {isClickThroughAutomationEnabled ? (
+              <ToggleOnIcon />
+            ) : (
+              <ToggleOffIcon />
+            )}
+          </div>
           {downloadState && (
             <div
               className="TopBar__menu-item"

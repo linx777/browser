@@ -5,6 +5,7 @@ import path from 'path';
 import fs from 'fs';
 import { BrowserWindow, screen } from 'electron';
 import screenshot from 'screenshot-desktop';
+import { globalShortcutsHelper } from './globalShortcuts';
 
 export interface ScreenshotOptions {
   hideWindow?: boolean;
@@ -14,12 +15,21 @@ export interface ScreenshotOptions {
 
 export class ScreenshotHelper {
   private static instance: ScreenshotHelper;
+
   private screenshotQueue: string[] = [];
+
   private readonly MAX_SCREENSHOTS = 10; // Maximum number of screenshots to keep
+
   private isTakingScreenshot = false;
+
   private lastScreenshotTime = 0;
+
   private readonly MIN_SCREENSHOT_INTERVAL = 100; // Minimum time between screenshots (ms)
+
   private readonly screenshotDir: string;
+
+  // eslint-disable-next-line no-undef
+  private clickThroughRestoreTimeout: NodeJS.Timeout | null = null;
 
   private constructor() {
     // Store screenshots in project directory
@@ -33,6 +43,22 @@ export class ScreenshotHelper {
       ScreenshotHelper.instance = new ScreenshotHelper();
     }
     return ScreenshotHelper.instance;
+  }
+
+  private scheduleClickThroughRestore(mainWindow?: BrowserWindow): void {
+    if (this.clickThroughRestoreTimeout) {
+      clearTimeout(this.clickThroughRestoreTimeout);
+      this.clickThroughRestoreTimeout = null;
+    }
+
+    this.clickThroughRestoreTimeout = setTimeout(() => {
+      if (!mainWindow || mainWindow.isDestroyed() || !mainWindow.isVisible()) {
+        return;
+      }
+
+      globalShortcutsHelper.enableClickThrough();
+      this.clickThroughRestoreTimeout = null;
+    }, 5000);
   }
 
   /**
@@ -182,6 +208,8 @@ export class ScreenshotHelper {
         try {
           await new Promise((resolve) => setTimeout(resolve, 5));
           mainWindow.show();
+          globalShortcutsHelper.disableClickThrough();
+          this.scheduleClickThroughRestore(mainWindow);
         } catch (showError) {
           console.error('[ScreenshotHelper] Failed to show window after screenshot:', showError);
         }
@@ -241,6 +269,13 @@ export class ScreenshotHelper {
       }
     });
     this.screenshotQueue = [];
+  }
+
+  public cleanup(): void {
+    if (this.clickThroughRestoreTimeout) {
+      clearTimeout(this.clickThroughRestoreTimeout);
+      this.clickThroughRestoreTimeout = null;
+    }
   }
 
   /**

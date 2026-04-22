@@ -49,8 +49,23 @@ contextBridge.exposeInMainWorld('titleBar', {
     },
   },
   tabs: {
-    select: ({tabId, newSession, isSavedBoard, board}: {tabId: string, newSession?: boolean, isSavedBoard?: boolean, board?: Board}) => {
-      ipcRenderer.send('tab-select', { tabId, newSession, isSavedBoard, board });
+    select: ({
+      tabId,
+      newSession,
+      isSavedBoard,
+      board,
+    }: {
+      tabId: string;
+      newSession?: boolean;
+      isSavedBoard?: boolean;
+      board?: Board;
+    }) => {
+      ipcRenderer.send('tab-select', {
+        tabId,
+        newSession,
+        isSavedBoard,
+        board,
+      });
     },
     purge: (tabId: string) => {
       ipcRenderer.send('tab-purge', { tabId });
@@ -125,6 +140,27 @@ contextBridge.exposeInMainWorld('titleBar', {
     ) => {
       ipcRenderer.on('load-saved-board', action);
     },
+    clickThroughState: (
+      action: (
+        event: IpcRendererEvent,
+        args: {
+          isClickThrough: boolean;
+          isClickThroughAutomationEnabled: boolean;
+        }
+      ) => void
+    ) => {
+      ipcRenderer.on('click-through-state-changed', action);
+    },
+    pasteRoutingState: (
+      action: (
+        event: IpcRendererEvent,
+        args: {
+          isPasteRoutingEnabled: boolean;
+        }
+      ) => void
+    ) => {
+      ipcRenderer.on('paste-routing-state-changed', action);
+    },
   },
   off: {
     openTab: () => {
@@ -169,6 +205,12 @@ contextBridge.exposeInMainWorld('titleBar', {
     loadSavedBoard: () => {
       ipcRenderer.removeAllListeners('load-saved-board');
     },
+    clickThroughState: () => {
+      ipcRenderer.removeAllListeners('click-through-state-changed');
+    },
+    pasteRoutingState: () => {
+      ipcRenderer.removeAllListeners('paste-routing-state-changed');
+    },
   },
   screens: {
     library: () => {
@@ -196,5 +238,14 @@ contextBridge.exposeInMainWorld('titleBar', {
   },
   getClickThroughState: () => {
     return ipcRenderer.invoke('get-click-through-state');
+  },
+  togglePasteRouting: () => {
+    return ipcRenderer.invoke('toggle-paste-routing');
+  },
+  getPasteRoutingState: () => {
+    return ipcRenderer.invoke('get-paste-routing-state');
+  },
+  routeClipboardToChatGPT: () => {
+    return ipcRenderer.invoke('route-clipboard-to-chatgpt');
   },
 });

@@ -57,6 +57,12 @@ if (store.get('application.forceMacosStyle') === undefined) {
   store.set('application.forceMacosStyle', false);
 }
 
+if (
+  store.get('application.routeClipboardToChatGPTOnPasteHotkey') === undefined
+) {
+  store.set('application.routeClipboardToChatGPTOnPasteHotkey', false);
+}
+
 if (store.get('chat.userId') === undefined) {
   const randomUserId = uuidv4();
   store.set('chat.userId', randomUserId);

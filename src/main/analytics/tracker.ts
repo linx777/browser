@@ -17,7 +17,7 @@ import {
   getDoc, // Added import
 } from 'firebase/firestore';
 import { UserData } from 'types/analytics';
-import { database } from './firebase';
+import { authReady, database } from './firebase';
 
 class Tracker {
   private appVersion: string;
@@ -30,6 +30,8 @@ class Tracker {
 
   private consent: boolean;
 
+  private remoteTrackingEnabled: boolean = true;
+
   private eventQueue: Array<{
     eventType: string;
     eventData?: Record<string, any>;
@@ -38,6 +40,9 @@ class Tracker {
 
   // eslint-disable-next-line no-undef
   private batchInterval: NodeJS.Timeout | undefined;
+
+  // eslint-disable-next-line no-undef
+  private performanceInterval: NodeJS.Timeout | undefined;
 
   private batchSize: number = 100; // Adjust as needed
 
@@ -53,15 +58,11 @@ class Tracker {
     this.consent = this.hasConsent();
 
     if (this.consent) {
-      // Initialize tracking features
-      this.initializeTracking();
+      this.initializeTracking().catch((error) => {
+        console.error('Error initializing analytics tracking:', error);
+      });
     } else {
       console.log('User has not consented to tracking.');
-    }
-
-    // Start performance monitoring if consented
-    if (this.consent) {
-      this.startPerformanceMonitoring();
     }
   }
 
@@ -145,24 +146,65 @@ class Tracker {
     return true;
   }
 
-  private initializeTracking(): void {
+  private isPermissionDeniedError(error: unknown): boolean {
+    return (
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      (error as { code?: string }).code === 'permission-denied'
+    );
+  }
+
+  private disableRemoteTracking(reason: string): void {
+    if (!this.remoteTrackingEnabled) {
+      return;
+    }
+
+    this.remoteTrackingEnabled = false;
+
+    if (this.batchInterval) {
+      clearInterval(this.batchInterval);
+      this.batchInterval = undefined;
+    }
+
+    if (this.performanceInterval) {
+      clearInterval(this.performanceInterval);
+      this.performanceInterval = undefined;
+    }
+
+    console.warn(`Remote analytics disabled: ${reason}`);
+  }
+
+  private async initializeTracking(): Promise<void> {
+    try {
+      await authReady;
+    } catch (error) {
+      console.error('Firebase authentication failed. Remote analytics disabled.', error);
+      this.disableRemoteTracking('anonymous Firebase auth failed');
+      return;
+    }
+
+    if (!this.remoteTrackingEnabled) {
+      return;
+    }
+
     // Update system information each time Tracker is instantiated
     this.updateSystemInfo();
 
-    // Load existing user data from Firestore
-    this.loadUserDataFromFirestore()
-      .then(() => {
-        // Update session data
-        return this.updateSessionData();
-      })
-      .then(() => {
-        // Send initial user data to Firestore
-        return this.sendUserDataToFirestore();
-      })
-      .catch(console.error);
+    try {
+      await this.loadUserDataFromFirestore();
+      await this.updateSessionData();
+      await this.sendUserDataToFirestore();
+    } catch (error) {
+      console.error('Error initializing analytics tracking:', error);
+    }
 
-    // Start batch processing
+    if (!this.remoteTrackingEnabled) {
+      return;
+    }
+
     this.startBatchProcessing();
+    this.startPerformanceMonitoring();
   }
 
   private updateSystemInfo(): void {
@@ -172,6 +214,10 @@ class Tracker {
   }
 
   private async loadUserDataFromFirestore(): Promise<void> {
+    if (!this.remoteTrackingEnabled) {
+      return;
+    }
+
     const userRef = doc(collection(database, 'users'), this.userId);
     try {
       const userSnapshot = await getDoc(userRef);
@@ -188,7 +234,12 @@ class Tracker {
         console.log('No existing user data found. Initializing new user data.');
       }
     } catch (error) {
-      console.error('Error loading user data from Firestore:', error);
+      if (this.isPermissionDeniedError(error)) {
+        this.disableRemoteTracking('Firestore rules rejected analytics reads');
+      } else {
+        console.error('Error loading user data from Firestore:', error);
+      }
+
       // In case of error, initialize firstSeen
       this.data.firstSeen = new Date().toISOString();
       this.data.numberOfSessions = 1;
@@ -215,6 +266,10 @@ class Tracker {
   }
 
   private async sendUserDataToFirestore(): Promise<void> {
+    if (!this.remoteTrackingEnabled) {
+      return;
+    }
+
     const userRef = doc(collection(database, 'users'), this.userId);
 
     const userData: UserData = {
@@ -232,13 +287,18 @@ class Tracker {
       await setDoc(userRef, userData, { merge: true });
       console.log('User data successfully stored/updated.');
     } catch (error) {
+      if (this.isPermissionDeniedError(error)) {
+        this.disableRemoteTracking('Firestore rules rejected analytics writes');
+        return;
+      }
+
       console.error('Error storing user data:', error);
     }
   }
 
   // Event Logging
   public logEvent(eventType: string, eventData?: Record<string, any>): void {
-    if (!this.consent) return; // Respect user consent
+    if (!this.consent || !this.remoteTrackingEnabled) return; // Respect user consent
 
     const event = {
       eventType,
@@ -255,9 +315,15 @@ class Tracker {
 
   // Batch Processing
   private startBatchProcessing(): void {
+    if (!this.remoteTrackingEnabled || this.batchInterval) {
+      return;
+    }
+
     this.batchInterval = setInterval(() => {
       if (this.eventQueue.length > 0) {
-        this.processEventBatch();
+        this.processEventBatch().catch((error) => {
+          console.error('Error processing analytics event batch:', error);
+        });
       }
     }, this.maxBatchInterval);
   }
@@ -274,6 +340,10 @@ class Tracker {
       timestamp: string;
     }>
   ): Promise<void> {
+    if (!this.remoteTrackingEnabled) {
+      return;
+    }
+
     const { userId } = this;
     const eventsRef = collection(database, 'users', userId, 'events');
 
@@ -294,6 +364,11 @@ class Tracker {
         `Batch of ${events.length} events successfully sent to Firestore.`
       );
     } catch (error) {
+      if (this.isPermissionDeniedError(error)) {
+        this.disableRemoteTracking('Firestore rules rejected event writes');
+        return;
+      }
+
       console.error('Error sending events to Firestore:', error);
       // Optionally, re-queue events or implement retry logic
       // For simplicity, re-queueing failed events
@@ -303,7 +378,11 @@ class Tracker {
 
   // Performance Monitoring
   private startPerformanceMonitoring(): void {
-    setInterval(() => {
+    if (!this.remoteTrackingEnabled || this.performanceInterval) {
+      return;
+    }
+
+    this.performanceInterval = setInterval(() => {
       const performanceData = this.collectPerformanceData();
       this.sendPerformanceDataToFirestore(performanceData).catch((error) => {
         console.error('Error sending performance data to Firestore:', error);
@@ -327,6 +406,10 @@ class Tracker {
   private async sendPerformanceDataToFirestore(
     performanceData: Record<string, any>
   ): Promise<void> {
+    if (!this.remoteTrackingEnabled) {
+      return;
+    }
+
     const { userId } = this;
     const performanceRef = collection(
       database,
@@ -345,13 +428,28 @@ class Tracker {
       );
       console.log('Performance data successfully sent to Firestore.');
     } catch (error) {
+      if (this.isPermissionDeniedError(error)) {
+        this.disableRemoteTracking(
+          'Firestore rules rejected performance metric writes'
+        );
+        return;
+      }
+
       console.error('Error sending performance data to Firestore:', error);
     }
   }
 
   // Clean up resources when app is quitting
   public cleanup(): void {
-    clearInterval(this.batchInterval);
+    if (this.batchInterval) {
+      clearInterval(this.batchInterval);
+      this.batchInterval = undefined;
+    }
+
+    if (this.performanceInterval) {
+      clearInterval(this.performanceInterval);
+      this.performanceInterval = undefined;
+    }
   }
 }
 

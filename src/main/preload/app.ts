@@ -38,7 +38,12 @@ import { DomainSuggestion } from 'types/suggestions';
 
 contextBridge.exposeInMainWorld('app', {
   // Click-through state access for renderer
-  getClickThroughState: (): Promise<{success: boolean; isClickThrough?: boolean; error?: string}> => {
+  getClickThroughState: (): Promise<{
+    success: boolean;
+    isClickThrough?: boolean;
+    isClickThroughAutomationEnabled?: boolean;
+    error?: string;
+  }> => {
     return ipcRenderer.invoke('get-click-through-state');
   },
   board: {

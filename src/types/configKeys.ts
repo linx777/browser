@@ -10,4 +10,5 @@ export interface ConfigKeys {
   'application.backgroundGradientColors': string[];
   'application.minimapTimeout': number;
   'application.minimapOn': boolean;
+  'application.routeClipboardToChatGPTOnPasteHotkey': boolean;
 }

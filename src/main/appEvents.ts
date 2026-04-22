@@ -4,7 +4,14 @@
 /* eslint-disable promise/no-callback-in-promise */
 /* eslint-disable promise/no-nesting */
 /* eslint-disable promise/always-return */
-import { app, session, ipcMain } from 'electron';
+import {
+  app,
+  session,
+  ipcMain,
+  clipboard,
+  nativeImage,
+  type WebContents,
+} from 'electron';
 import contextMenu from 'electron-context-menu';
 import path from 'path';
 
@@ -12,7 +19,11 @@ import { Electron } from 'namespaces/_electronist';
 import { makeAssociation } from './association';
 import { globalShortcutsHelper } from './globalShortcuts';
 import { screenshotHelper } from './screenshotHelper'; // Initialize screenshotHelper to clear screenshots on startup
-import { isAIServiceURL, getAllAIServiceInputSelectors, getAIServicesByPriority } from './config/aiServices';
+import {
+  isAIServiceURL,
+  getAllAIServiceInputSelectors,
+  getAIServicesByPriority,
+} from './config/aiServices';
 void screenshotHelper; // Ensure screenshotHelper is initialized
 import {
   createWindow,
@@ -31,13 +42,148 @@ import {
   getCertificateErrorAuth,
   makeIpcMainEvents,
 } from './ipcMainEvents';
+import { getStore } from './store';
 import { isValidUrl } from './util';
 import Tracker from './analytics/tracker';
 
 // Global variables for ChatGPT input click detection
 let chatgptClickTimeout: NodeJS.Timeout | null = null;
 let isListeningForChatGPTClick = false;
+const store = getStore();
+let isPasteRoutingEnabled = Boolean(
+  store.get('application.routeClipboardToChatGPTOnPasteHotkey')
+);
 
+const emitPasteRoutingState = () => {
+  getMainWindow()?.webContents.send('paste-routing-state-changed', {
+    isPasteRoutingEnabled,
+  });
+};
+
+export const setPasteRoutingEnabled = (enabled: boolean) => {
+  isPasteRoutingEnabled = enabled;
+  store.set('application.routeClipboardToChatGPTOnPasteHotkey', enabled);
+  emitPasteRoutingState();
+  return isPasteRoutingEnabled;
+};
+
+export const togglePasteRoutingEnabled = () => {
+  return setPasteRoutingEnabled(!isPasteRoutingEnabled);
+};
+
+export const getPasteRoutingEnabled = () => {
+  return isPasteRoutingEnabled;
+};
+
+const getAIServiceTarget = (): {
+  webContents: WebContents;
+  browserId: string | null;
+  serviceName: string;
+} | null => {
+  const browsers = getBrowsers();
+  const aiServices = getAIServicesByPriority();
+
+  for (const service of aiServices) {
+    for (const [browserId, webContents] of Object.entries(browsers)) {
+      const url = webContents.getURL();
+      if (service.urls.some((serviceUrl) => url.includes(serviceUrl))) {
+        return {
+          webContents,
+          browserId,
+          serviceName: service.name,
+        };
+      }
+    }
+  }
+
+  return null;
+};
+
+const shouldRoutePasteShortcut = (input: {
+  type?: string;
+  key?: string;
+  meta?: boolean;
+  control?: boolean;
+  alt?: boolean;
+  shift?: boolean;
+}) => {
+  const key = input.key?.toLowerCase();
+  const primaryModifier =
+    process.platform === 'darwin' ? input.meta : input.control;
+
+  return (
+    input.type === 'keyDown' &&
+    key === 'v' &&
+    !!primaryModifier &&
+    !input.alt &&
+    !input.shift
+  );
+};
+
+const buildFocusAIServiceInputScript = () => `
+  (() => {
+    try {
+      const aiServiceSelectors = ${JSON.stringify(
+        getAllAIServiceInputSelectors()
+      )};
+
+      let inputElement = null;
+
+      for (const selector of aiServiceSelectors) {
+        inputElement = document.querySelector(selector);
+        if (inputElement) {
+          break;
+        }
+      }
+
+      if (!inputElement) {
+        return false;
+      }
+
+      inputElement.focus();
+      inputElement.scrollIntoView({ block: 'center', inline: 'nearest' });
+      return true;
+    } catch (error) {
+      console.error('Error focusing ChatGPT input:', error);
+      return false;
+    }
+  })();
+`;
+
+const focusAIServiceInput = async (
+  target = getAIServiceTarget()
+): Promise<{
+  webContents: WebContents;
+  browserId: string | null;
+  serviceName: string;
+} | null> => {
+  try {
+    if (!target) {
+      return null;
+    }
+
+    if (target.browserId) {
+      getMainWindow()?.webContents.send('switch-to-browser', {
+        browserId: target.browserId,
+      });
+    }
+
+    target.webContents.focus();
+
+    const focused = await target.webContents.executeJavaScript(
+      buildFocusAIServiceInputScript()
+    );
+
+    if (!focused) {
+      return null;
+    }
+
+    return target;
+  } catch (error) {
+    console.error('Error focusing AI service input:', error);
+    return null;
+  }
+};
 
 // Function to start listening for ChatGPT input clicks with timeout
 export const startChatGPTClickListening = () => {
@@ -46,16 +192,16 @@ export const startChatGPTClickListening = () => {
     if (chatgptClickTimeout) {
       clearTimeout(chatgptClickTimeout);
     }
-    
+
     // Set flag to indicate we're listening
     isListeningForChatGPTClick = true;
-    
+
     // Set timeout
     chatgptClickTimeout = setTimeout(() => {
       isListeningForChatGPTClick = false;
       chatgptClickTimeout = null;
     }, 3500);
-    
+
     return true;
   } catch (error) {
     console.error('Error starting ChatGPT click listening:', error);
@@ -78,90 +224,36 @@ export const stopChatGPTClickListening = () => {
   }
 };
 
-
 // Function to focus AI service input area
 export const focusChatGPTInput = () => {
-  try {
-    // Get all browser webviews
-    const browsers = getBrowsers();
-    
-    // Find AI service tab/webview (prioritized by configuration)
-    let aiServiceWebContents = null;
-    const aiServices = getAIServicesByPriority();
-    
-    for (const service of aiServices) {
-      for (const [, webContents] of Object.entries(browsers)) {
-        const url = webContents.getURL();
-        if (service.urls.some(serviceUrl => url.includes(serviceUrl))) {
-          aiServiceWebContents = webContents;
-          break;
-        }
-      }
-      if (aiServiceWebContents) break;
-    }
-    
-    if (aiServiceWebContents) {
-      // First switch to the AI service browser tab
-      const { getMainWindow } = require('./browser');
-      
-      // Find the browser ID that corresponds to this webContents ID
-      let targetBrowserId = null;
-      for (const [browserId, webContents] of Object.entries(browsers)) {
-        if (webContents.id === aiServiceWebContents.id) {
-          targetBrowserId = browserId;
-          break;
-        }
-      }
-      
-      if (targetBrowserId) {
-        // Send message to renderer to switch to this browser
-        const mainWindow = getMainWindow();
-        if (mainWindow) {
-          mainWindow.webContents.send('switch-to-browser', { browserId: targetBrowserId });
-        }
-      }
-      
-      // Focus the AI service webview
-      aiServiceWebContents.focus();
-      
-      // Wait a moment for focus to take effect, then focus the input
-      setTimeout(() => {
-        aiServiceWebContents.executeJavaScript(`
-          (() => {
-            try {
-              // AI service input selectors
-              const aiServiceSelectors = ${JSON.stringify(getAllAIServiceInputSelectors())};
-              
-              let inputElement = null;
-              
-              // Try each selector
-              for (const selector of aiServiceSelectors) {
-                inputElement = document.querySelector(selector);
-                if (inputElement) {
-                  break;
-                }
-              }
-              
-              if (inputElement) {
-                // Focus the input
-                inputElement.focus();
-                
-                // Scroll into view if needed
-                inputElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                
-                // Input focused successfully
-              }
-            } catch (error) {
-              console.error('Error focusing ChatGPT input:', error);
-            }
-          })();
-        `).catch((_err: any) => {
-          // Could not focus ChatGPT input
-        });
-      }, 100);
-    }
-  } catch (error) {
+  focusAIServiceInput().catch((error) => {
     console.error('Error focusing ChatGPT input:', error);
+  });
+};
+
+export const injectImageToChatGPT = async (
+  imagePath: string
+): Promise<boolean> => {
+  try {
+    const image = nativeImage.createFromPath(imagePath);
+
+    if (image.isEmpty()) {
+      return false;
+    }
+
+    const target = await focusAIServiceInput();
+
+    if (!target) {
+      return false;
+    }
+
+    clipboard.writeImage(image);
+    target.webContents.focus();
+    target.webContents.paste();
+    return true;
+  } catch (error) {
+    console.error('Error injecting screenshot into ChatGPT:', error);
+    return false;
   }
 };
 
@@ -173,10 +265,14 @@ const setupChatGPTInputClickDetection = (webContents: any) => {
   }
 
   // Inject click detection script into AI service pages
-  webContents.executeJavaScript(`
+  webContents
+    .executeJavaScript(
+      `
     (() => {
       // AI service input selectors
-      const aiServiceSelectors = ${JSON.stringify(getAllAIServiceInputSelectors())};
+      const aiServiceSelectors = ${JSON.stringify(
+        getAllAIServiceInputSelectors()
+      )};
       
       // Function to check if element matches AI service input selectors
       function isAIServiceInput(element) {
@@ -215,48 +311,44 @@ const setupChatGPTInputClickDetection = (webContents: any) => {
       
       // AI service input click detection enabled
     })();
-  `).catch((_err: any) => {
-    // Could not inject ChatGPT click detection
-  });
+  `
+    )
+    .catch((_err: any) => {
+      // Could not inject ChatGPT click detection
+    });
 };
 
 // Function to switch focus to AI service and paste content (prioritized by configuration)
-const switchToChatGPTAndPaste = (content: string) => {
+export const switchToChatGPTAndPaste = (content: string): boolean => {
   try {
-    // Get all browser webviews
-    const browsers = getBrowsers();
-    
-    // Find AI service tab/webview (prioritized by configuration)
-    let targetWebContents = null;
-    let serviceName = 'None';
-    const aiServices = getAIServicesByPriority();
-    
-    for (const service of aiServices) {
-      for (const [, webContents] of Object.entries(browsers)) {
-        const url = webContents.getURL();
-        if (service.urls.some(serviceUrl => url.includes(serviceUrl))) {
-          targetWebContents = webContents;
-          serviceName = service.name;
-          break;
-        }
-      }
-      if (targetWebContents) break;
-    }
-    
-    if (targetWebContents) {
+    const target = getAIServiceTarget();
+
+    if (target) {
+      const targetAIWebContents = target.webContents;
+      const serviceName = target.serviceName;
+
       // First, focus the input area using AppleScript
       focusChatGPTInput();
-      
+
       // Wait longer for AppleScript focus to take effect, then paste the content
       setTimeout(() => {
         // Escape the content properly for JavaScript execution
-        const escapedContent = content.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"').replace(/\n/g, '\\n').replace(/\r/g, '\\r');
-        
-        targetWebContents.executeJavaScript(`
+        const escapedContent = content
+          .replace(/\\/g, '\\\\')
+          .replace(/'/g, "\\'")
+          .replace(/"/g, '\\"')
+          .replace(/\n/g, '\\n')
+          .replace(/\r/g, '\\r');
+
+        targetAIWebContents
+          .executeJavaScript(
+            `
           (() => {
             try {
               // Look for AI service input field with various selectors
-              const aiServiceSelectors = ${JSON.stringify(getAllAIServiceInputSelectors())};
+              const aiServiceSelectors = ${JSON.stringify(
+                getAllAIServiceInputSelectors()
+              )};
               
               let inputElement = null;
               
@@ -362,14 +454,29 @@ const switchToChatGPTAndPaste = (content: string) => {
               console.error('Error in AI service paste script:', error);
             }
           })();
-        `).catch(() => {
-          // Silently handle errors to avoid console spam
-        });
+        `
+          )
+          .catch(() => {
+            // Silently handle errors to avoid console spam
+          });
       }, 500); // Wait longer for AppleScript focus to take effect
+      return true;
     }
   } catch (error) {
     // Silently handle errors
+    return false;
   }
+  return false;
+};
+
+export const routeClipboardToChatGPT = (): boolean => {
+  const clipboardText = clipboard.readText();
+
+  if (!clipboardText || !clipboardText.trim()) {
+    return false;
+  }
+
+  return switchToChatGPTAndPaste(clipboardText);
 };
 
 let urlToOpen: string | undefined;
@@ -422,7 +529,6 @@ const makeAppEvents = () => {
   app.on('before-quit', () => {
     tracker.cleanup();
   });
-
 
   app.on('second-instance', (_e, argv) => {
     const mainWindow = getMainWindow();
@@ -490,17 +596,27 @@ const makeAppEvents = () => {
     contents.on('did-attach-webview', (_daw, webContents) => {
       getBrowsers()[webContents.id] = webContents;
       webContents.session.setMaxListeners(99);
-      
+
+      webContents.on('before-input-event', (event, input) => {
+        if (!isPasteRoutingEnabled || !shouldRoutePasteShortcut(input)) {
+          return;
+        }
+
+        if (routeClipboardToChatGPT()) {
+          event.preventDefault();
+        }
+      });
+
       // Set up ChatGPT input click detection when webview is ready
       webContents.once('dom-ready', () => {
         setupChatGPTInputClickDetection(webContents);
       });
-      
+
       // Also set up click detection when navigation completes (for SPA changes)
       webContents.on('did-finish-load', () => {
         setupChatGPTInputClickDetection(webContents);
       });
-      
+
       // Listen for custom messages from the webview
       webContents.addListener('console-message', (_event, _level, message) => {
         try {
@@ -519,10 +635,16 @@ const makeAppEvents = () => {
           } else if (data.type === 'REMOVE_CLIPBOARD_ITEM' && data.itemId) {
             const { clipboardManager } = require('./clipboardManager');
             clipboardManager.removeClipboardItem(data.itemId);
-          } else if (data.type === 'SWITCH_TO_CHATGPT_AND_PASTE' && data.content) {
+          } else if (
+            data.type === 'SWITCH_TO_CHATGPT_AND_PASTE' &&
+            data.content
+          ) {
             // Switch focus to ChatGPT and paste content
             switchToChatGPTAndPaste(data.content);
-          } else if (data.type === 'CHATGPT_INPUT_CLICKED' && data.action === 'simulate_paste') {
+          } else if (
+            data.type === 'CHATGPT_INPUT_CLICKED' &&
+            data.action === 'simulate_paste'
+          ) {
             // Only simulate paste if we're currently listening
             if (isListeningForChatGPTClick) {
               // Use the webContents that sent the message directly
@@ -535,7 +657,7 @@ const makeAppEvents = () => {
           // Ignore non-JSON messages
         }
       });
-      
+
       webContents.addListener('dom-ready', () => {
         if (webContents.getURL() === 'https://web.whatsapp.com/') {
           webContents.setUserAgent(
@@ -550,7 +672,9 @@ const makeAppEvents = () => {
         });
 
         // Inject auto-copy script and force arrow cursor after DOM is ready
-        webContents.executeJavaScript(`
+        webContents
+          .executeJavaScript(
+            `
           (() => {
             // Only inject if not already injected
             if (window.bonbonAutoCopyInjected) return;
@@ -950,9 +1074,11 @@ const makeAppEvents = () => {
             });
             
           })();
-        `).catch(() => {
-          // Ignore errors for pages that don't allow script execution
-        });
+        `
+          )
+          .catch(() => {
+            // Ignore errors for pages that don't allow script execution
+          });
       });
 
       const mainWindow = getMainWindow();
@@ -1071,12 +1197,12 @@ app
           .fromPartition('persist:user-partition')
           .setPermissionRequestHandler((webContents, permission, callback) => {
             const url = webContents.getURL();
-            
+
             // Allow permissions for localhost (app UI)
             if (url === 'http://localhost:1212/index.html') {
               return callback(true);
             }
-            
+
             // Allow essential permissions for web browsing
             const allowedPermissions = [
               'fullscreen',
@@ -1085,28 +1211,32 @@ app
               'notifications', // For web notifications
               'geolocation', // For location services
               'clipboard-read', // For clipboard access
-              'clipboard-write' // For clipboard writing
+              'clipboard-write', // For clipboard writing
             ];
-            
+
             if (allowedPermissions.includes(permission)) {
               // For microphone permissions, temporarily disable click-through
               if (permission === 'media') {
                 const { globalShortcutsHelper } = require('./globalShortcuts');
                 globalShortcutsHelper.disableClickThrough();
-                console.log('Microphone permission requested - temporarily disabled click-through for voice interaction');
-                
+                console.log(
+                  'Microphone permission requested - temporarily disabled click-through for voice interaction'
+                );
+
                 // Re-enable click-through after 30 seconds if user doesn't interact
                 setTimeout(() => {
                   if (!globalShortcutsHelper.getClickThroughState()) {
                     globalShortcutsHelper.enableClickThrough();
-                    console.log('Re-enabled click-through after microphone permission timeout');
+                    console.log(
+                      'Re-enabled click-through after microphone permission timeout'
+                    );
                   }
                 }, 30000);
               }
-              
+
               return callback(true);
             }
-            
+
             // Block other permissions
             return callback(false);
           });

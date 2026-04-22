@@ -24,13 +24,13 @@ const app = initializeApp(firebaseConfig);
 const database = getFirestore(app);
 const auth = getAuth(app);
 
-// Sign in anonymously
-signInAnonymously(auth)
+const authReady = signInAnonymously(auth)
   .then(() => {
     console.log('Signed in anonymously to Firebase Auth');
   })
   .catch((error) => {
     console.error('Firebase Auth Error:', error);
+    throw error;
   });
 
-export { database };
+export { database, authReady };

@@ -54,6 +54,7 @@ export type StoreValue =
   | number
   | boolean
   | null
+  | undefined
   | Record<string, unknown>
   | StoreValue[];
 

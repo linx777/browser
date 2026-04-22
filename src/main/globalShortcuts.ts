@@ -6,6 +6,7 @@ import { globalShortcut, app, BrowserWindow } from 'electron';
 export class GlobalShortcutsHelper {
   private mainWindow: BrowserWindow | null = null;
   private isClickThrough: boolean = true; // Default to click-through enabled
+  private isClickThroughAutomationEnabled: boolean = true;
   private mouseTrackingInterval: NodeJS.Timeout | null = null;
   private lastManualToggle: number = 0; // Track when user manually toggles click-through
   private currentZoomFactor: number = 1; // Track current zoom across views
@@ -19,11 +20,9 @@ export class GlobalShortcutsHelper {
   private zoomShortcutsRegistered: boolean = false;
   private readonly zoomInAccelerators: string[] = [
     'CommandOrControl+=',
-    'CommandOrControl+Shift+='
+    'CommandOrControl+Shift+=',
   ];
-  private readonly zoomOutAccelerators: string[] = [
-    'CommandOrControl+-'
-  ];
+  private readonly zoomOutAccelerators: string[] = ['CommandOrControl+-'];
 
   // Track critical shortcuts that must remain always-on
   private readonly criticalAccelerators: string[] = [
@@ -42,23 +41,46 @@ export class GlobalShortcutsHelper {
     });
   }
 
+  private emitClickThroughState(): void {
+    if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
+
+    this.mainWindow.webContents.send('click-through-state-changed', {
+      isClickThrough: this.isClickThrough,
+      isClickThroughAutomationEnabled: this.isClickThroughAutomationEnabled,
+    });
+  }
+
+  private syncClickThroughState(isClickThrough: boolean): void {
+    this.isClickThrough = isClickThrough;
+    this.emitClickThroughState();
+    this.updateZoomShortcutsRegistration();
+  }
+
+  private syncClickThroughAutomationState(
+    isClickThroughAutomationEnabled: boolean
+  ): void {
+    this.isClickThroughAutomationEnabled = isClickThroughAutomationEnabled;
+    this.emitClickThroughState();
+  }
+
   /**
    * Sets the main window reference and enables click-through by default
    */
   setMainWindow(window: BrowserWindow | null): void {
     this.mainWindow = window;
-    
+
     // Enable click-through by default when window is set
     if (window) {
       this.enableClickThrough();
-      
+
       // Start mouse tracking when window is ready
       window.on('ready-to-show', () => {
         this.startMouseTracking();
         console.log('Started mouse tracking for automatic click-through');
+        this.emitClickThroughState();
         this.updateZoomShortcutsRegistration();
       });
-      
+
       // Stop mouse tracking when window is closed
       window.on('closed', () => {
         this.stopMouseTracking();
@@ -122,6 +144,11 @@ export class GlobalShortcutsHelper {
     // Single press Cmd/Ctrl+T => temporarily disable click-through
     // Double-press Cmd/Ctrl+T within threshold => toggle persistent disable lock
     globalShortcut.register('CommandOrControl+T', () => {
+      if (!this.isClickThroughAutomationEnabled) {
+        this.disableClickThrough();
+        return;
+      }
+
       const now = Date.now();
       // If second press within threshold => treat as double press
       if (now - this.lastTPressTime <= this.doublePressThresholdMs) {
@@ -165,7 +192,6 @@ export class GlobalShortcutsHelper {
       this.focusChatGPTInput();
     });
 
-
     console.log('Global shortcuts registered successfully');
   }
 
@@ -200,12 +226,12 @@ export class GlobalShortcutsHelper {
    */
   private moveWindowLeft(): void {
     if (!this.mainWindow) return;
-    
+
     const [currentX, currentY] = this.mainWindow.getPosition();
     const moveDistance = 10;
     // Allow negative X positions so window can move beyond the left edge
     const newX = currentX - moveDistance;
-    
+
     this.mainWindow.setPosition(newX, currentY);
   }
 
@@ -214,11 +240,11 @@ export class GlobalShortcutsHelper {
    */
   private moveWindowRight(): void {
     if (!this.mainWindow) return;
-    
+
     const [currentX, currentY] = this.mainWindow.getPosition();
     const moveDistance = 10;
     const newX = currentX + moveDistance;
-    
+
     this.mainWindow.setPosition(newX, currentY);
   }
 
@@ -227,11 +253,11 @@ export class GlobalShortcutsHelper {
    */
   private moveWindowUp(): void {
     if (!this.mainWindow) return;
-    
+
     const [currentX, currentY] = this.mainWindow.getPosition();
     const moveDistance = 10;
     const newY = Math.max(0, currentY - moveDistance);
-    
+
     this.mainWindow.setPosition(currentX, newY);
   }
 
@@ -240,11 +266,11 @@ export class GlobalShortcutsHelper {
    */
   private moveWindowDown(): void {
     if (!this.mainWindow) return;
-    
+
     const [currentX, currentY] = this.mainWindow.getPosition();
     const moveDistance = 10;
     const newY = currentY + moveDistance;
-    
+
     this.mainWindow.setPosition(currentX, newY);
   }
 
@@ -253,11 +279,12 @@ export class GlobalShortcutsHelper {
    */
   private toggleWindowVisibility(): void {
     if (!this.mainWindow) return;
-    
+
     if (this.mainWindow.isVisible()) {
       this.mainWindow.hide();
     } else {
       this.mainWindow.show();
+      this.disableClickThrough();
     }
   }
 
@@ -266,10 +293,10 @@ export class GlobalShortcutsHelper {
    */
   private adjustOpacity(delta: number): void {
     if (!this.mainWindow) return;
-    
+
     const currentOpacity = this.mainWindow.getOpacity();
     const newOpacity = Math.max(0.1, Math.min(1.0, currentOpacity + delta));
-    
+
     console.log(`Adjusting opacity from ${currentOpacity} to ${newOpacity}`);
     this.mainWindow.setOpacity(newOpacity);
   }
@@ -290,7 +317,10 @@ export class GlobalShortcutsHelper {
 
       // Use webContents zoomFactor which applies to the page
       const wc: any = view.webContents as any;
-      const current: number = typeof wc.getZoomFactor === 'function' ? wc.getZoomFactor() : this.currentZoomFactor;
+      const current: number =
+        typeof wc.getZoomFactor === 'function'
+          ? wc.getZoomFactor()
+          : this.currentZoomFactor;
       const next = Math.max(0.25, Math.min(3, +(current + delta).toFixed(2)));
       if (typeof wc.setZoomFactor === 'function') wc.setZoomFactor(next);
       this.currentZoomFactor = next;
@@ -304,19 +334,26 @@ export class GlobalShortcutsHelper {
    */
   enableClickThrough(): void {
     if (!this.mainWindow) return;
+    if (!this.isClickThroughAutomationEnabled) {
+      console.log(
+        'Enable click-through ignored because the title bar override is off'
+      );
+      return;
+    }
     // If persistent disable lock is active, ignore enable requests
     if (this.persistentDisableLock) {
-      console.log('Enable click-through ignored due to persistent disable lock');
+      console.log(
+        'Enable click-through ignored due to persistent disable lock'
+      );
       return;
     }
     try {
       this.mainWindow.setIgnoreMouseEvents(true, { forward: true });
-      this.isClickThrough = true;
+      this.syncClickThroughState(true);
     } catch (e) {
       console.error('Failed to enable click-through:', e);
     }
     console.log('Click-through enabled - clicks will pass through');
-    this.updateZoomShortcutsRegistration();
   }
 
   /**
@@ -330,12 +367,11 @@ export class GlobalShortcutsHelper {
 
     try {
       this.mainWindow.setIgnoreMouseEvents(false);
-      this.isClickThrough = false;
+      this.syncClickThroughState(false);
     } catch (e) {
       console.error('Failed to disable click-through:', e);
     }
     console.log('Click-through disabled - normal mouse interaction restored');
-    this.updateZoomShortcutsRegistration();
   }
 
   /**
@@ -356,34 +392,70 @@ export class GlobalShortcutsHelper {
     return this.isClickThrough;
   }
 
+  toggleClickThroughAutomation(): void {
+    this.setClickThroughAutomationEnabled(
+      !this.isClickThroughAutomationEnabled
+    );
+  }
+
+  setClickThroughAutomationEnabled(
+    isClickThroughAutomationEnabled: boolean
+  ): void {
+    this.syncClickThroughAutomationState(isClickThroughAutomationEnabled);
+
+    if (this.tSinglePressTimer) {
+      clearTimeout(this.tSinglePressTimer);
+      this.tSinglePressTimer = null;
+    }
+    this.lastTPressTime = 0;
+
+    if (!isClickThroughAutomationEnabled) {
+      this.disableClickThrough();
+      return;
+    }
+
+    if (this.persistentDisableLock) {
+      this.disableClickThrough();
+      return;
+    }
+
+    this.enableClickThrough();
+  }
+
+  getClickThroughAutomationState(): boolean {
+    return this.isClickThroughAutomationEnabled;
+  }
+
   /**
    * Starts mouse tracking for automatic click-through management
    */
   startMouseTracking(): void {
     if (this.mouseTrackingInterval) return; // Already tracking
-    
+
     this.mouseTrackingInterval = setInterval(() => {
       if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
+      if (!this.isClickThroughAutomationEnabled) return;
       // Do not auto-toggle when persistent disable lock is active
       if (this.persistentDisableLock) return;
-      
+
       // Don't interfere with manual toggles for 2 seconds
       if (Date.now() - this.lastManualToggle < 2000) return;
-      
+
       const { screen } = require('electron');
       const cursor = screen.getCursorScreenPoint();
       const windowBounds = this.mainWindow.getBounds();
-      
+
       // Check if mouse is within window bounds
-      const isMouseInWindow = cursor.x >= windowBounds.x && 
-                             cursor.x <= windowBounds.x + windowBounds.width &&
-                             cursor.y >= windowBounds.y && 
-                             cursor.y <= windowBounds.y + windowBounds.height;
-      
+      const isMouseInWindow =
+        cursor.x >= windowBounds.x &&
+        cursor.x <= windowBounds.x + windowBounds.width &&
+        cursor.y >= windowBounds.y &&
+        cursor.y <= windowBounds.y + windowBounds.height;
+
       if (!isMouseInWindow && !this.isClickThrough) {
         // Mouse is outside window, enable click-through
         this.mainWindow.setIgnoreMouseEvents(true, { forward: true });
-        this.isClickThrough = true;
+        this.syncClickThroughState(true);
         console.log('Mouse left window - automatically enabled click-through');
       }
       // Note: We never automatically disable click-through when mouse enters window
@@ -398,7 +470,9 @@ export class GlobalShortcutsHelper {
   private togglePersistentDisable(): void {
     this.persistentDisableLock = !this.persistentDisableLock;
     if (this.persistentDisableLock) {
-      console.log('Persistent disable lock enabled - click-through stays disabled');
+      console.log(
+        'Persistent disable lock enabled - click-through stays disabled'
+      );
       this.disableClickThrough();
     } else {
       console.log('Persistent disable lock disabled - restoring click-through');
@@ -421,46 +495,30 @@ export class GlobalShortcutsHelper {
    */
   private async takeScreenshot(): Promise<void> {
     try {
-      // First focus the AI service input area before taking screenshot
-      this.focusChatGPTInput();
-      
-      // Wait a moment for focus to take effect
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
       const { screenshotHelper } = require('./screenshotHelper');
-      const screenshotPath = await screenshotHelper.takeScreenshot(this.mainWindow, {
-        hideWindow: true,
-        format: 'png'
-      });
-      
+      const screenshotPath = await screenshotHelper.takeScreenshot(
+        this.mainWindow,
+        {
+          hideWindow: true,
+          format: 'png',
+        }
+      );
+
       if (screenshotPath) {
-        // Copy screenshot to clipboard
         try {
-          const { clipboard } = require('electron');
-          const fs = require('fs');
-          
-          // Read the image file
-          const imageBuffer = fs.readFileSync(screenshotPath);
-          
-          // Create a native image from buffer
-          const { nativeImage } = require('electron');
-          const image = nativeImage.createFromBuffer(imageBuffer);
-          
-          // Copy to clipboard
-          clipboard.writeImage(image);
-          
-          // Automatically simulate Cmd+V paste
-          setTimeout(() => {
-            try {
-              const { simulatePasteWithGlobalShortcut } = require('./keyboardSimulation');
-              simulatePasteWithGlobalShortcut();
-            } catch (pasteError) {
-              console.error('Error simulating paste:', pasteError);
-            }
-          }, 100); // Delay to ensure clipboard is ready
-          
-        } catch (clipboardError) {
-          console.error('Error copying screenshot to clipboard:', clipboardError);
+          const { injectImageToChatGPT } = require('./appEvents');
+          const injected = await injectImageToChatGPT(screenshotPath);
+
+          if (!injected) {
+            console.warn(
+              'Screenshot captured, but automatic ChatGPT image injection was skipped.'
+            );
+          }
+        } catch (injectError) {
+          console.error(
+            'Error injecting screenshot into ChatGPT:',
+            injectError
+          );
         }
       }
     } catch (error) {
@@ -489,43 +547,56 @@ export class GlobalShortcutsHelper {
       // Clear all screenshots
       const { screenshotHelper } = require('./screenshotHelper');
       screenshotHelper.clearAllScreenshots();
-      
+
       // Clear clipboard items
       const { clipboardManager } = require('./clipboardManager');
       clipboardManager.clearClipboardItems();
-      
+
       // Clear clipboard JSON file
       const fs = require('fs');
       const path = require('path');
-      const clipboardFilePath = path.join(__dirname, '..', '..', 'clipboard-items.json');
+      const clipboardFilePath = path.join(
+        __dirname,
+        '..',
+        '..',
+        'clipboard-items.json'
+      );
       if (fs.existsSync(clipboardFilePath)) {
         fs.writeFileSync(clipboardFilePath, '[]');
       }
-      
+
       // Send message to renderer to clear toasts
       if (this.mainWindow) {
         this.mainWindow.webContents.send('clear-all-toasts');
-        
+
         // Also clear copy toasts by executing JavaScript in all webviews
-        this.mainWindow.webContents.executeJavaScript(`
+        this.mainWindow.webContents
+          .executeJavaScript(
+            `
           // Clear all copy toasts (bonbon-notification elements)
           document.querySelectorAll('.bonbon-notification').forEach(toast => toast.remove());
-        `).catch(() => {
-          // Silently handle errors
-        });
+        `
+          )
+          .catch(() => {
+            // Silently handle errors
+          });
       }
-      
+
       // Clear copy toasts in all browser webviews
       const { getBrowsers } = require('./ipcMainEvents');
       const browsers = getBrowsers();
       Object.values(browsers).forEach((webContents: any) => {
         if (webContents && !webContents.isDestroyed()) {
-          webContents.executeJavaScript(`
+          webContents
+            .executeJavaScript(
+              `
             // Clear all copy toasts (bonbon-notification elements)
             document.querySelectorAll('.bonbon-notification').forEach(toast => toast.remove());
-          `).catch(() => {
-            // Silently handle errors
-          });
+          `
+            )
+            .catch(() => {
+              // Silently handle errors
+            });
         }
       });
     } catch (error) {
@@ -579,7 +650,11 @@ export class GlobalShortcutsHelper {
    * Conditionally register/unregister zoom shortcuts based on app visibility and click-through state
    */
   private updateZoomShortcutsRegistration(): void {
-    const allowed = !!this.mainWindow && !this.mainWindow.isDestroyed() && this.mainWindow.isVisible() && !this.isClickThrough;
+    const allowed =
+      !!this.mainWindow &&
+      !this.mainWindow.isDestroyed() &&
+      this.mainWindow.isVisible() &&
+      !this.isClickThrough;
     if (allowed) this.registerZoomShortcuts();
     else this.unregisterZoomShortcuts();
   }
