@@ -31,3 +31,7 @@ npm-debug.log.*
 
 src/renderer/localazy.json
 src/main/localazy.json
+
+# Local app artifacts
+clipboard-items.json
+screenshots/*.png
